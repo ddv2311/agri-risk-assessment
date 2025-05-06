@@ -13,70 +13,132 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     
     # Database settings
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///data/agricultural_data.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Logging
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    # Cache configuration
+    CACHE_TYPE = 'redis'
+    CACHE_REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    CACHE_DEFAULT_TIMEOUT = 300  # 5 minutes
     
-    # API settings
-    API_TITLE = 'Agricultural Risk Assessment API'
-    API_VERSION = '1.0.0'
+    # API configuration
+    API_VERSION = 'v1'
+    API_BASE_URL = '/api/' + API_VERSION
     
-    # Model settings
-    MODEL_PATH = os.getenv('MODEL_PATH', 'models/risk_assessment_model.joblib')
-    
-    # Data collection settings
+    # Default region and crop
     DEFAULT_REGION = 'Gujarat'
     DEFAULT_CROP = 'wheat'
     
-    # API keys
-    DATA_GOV_API_KEY = os.getenv('DATA_GOV_API_KEY', 'your-data-gov-api-key')
-    IMD_API_KEY = os.getenv('IMD_API_KEY', 'your-imd-api-key')
+    # API Keys
+    DATA_GOV_API_KEY = os.getenv('DATA_GOV_API_KEY')
+    IMD_API_KEY = os.getenv('IMD_API_KEY')
     
-    # Model parameters
+    # Model Parameters
     MODEL_PARAMS = {
-        'n_estimators': 100,
+        'objective': 'binary:logistic',
+        'max_depth': 6,
         'learning_rate': 0.1,
-        'max_depth': 3
+        'n_estimators': 100,
+        'random_state': 42,
+        'eval_metric': 'logloss',
+        'use_label_encoder': False
     }
     
-    # Feature engineering settings
+    # Risk Thresholds
+    RISK_THRESHOLDS = {
+        'low': 0.3,
+        'medium': 0.6,
+        'high': 0.9
+    }
+    
+    # Features
     FEATURES = [
-        'crop_yield_variability',
+        'yield_variability',
         'rainfall_deviation',
-        'temperature_anomalies',
+        'temperature_anomaly',
         'price_volatility'
     ]
     
-    # Risk score thresholds
-    RISK_THRESHOLDS = {
-        'low': (0.0, 0.33),
-        'medium': (0.33, 0.66),
-        'high': (0.66, 1.0)
+    # Error Handling
+    ERROR_HANDLING = {
+        'max_retries': 3,
+        'retry_delay': 2,  # seconds
+        'timeout': 30  # seconds
     }
     
-    # Demo user
-    DEMO_USER_USERNAME = os.getenv('DEMO_USER_USERNAME', 'demo@ignosis.ai')
-    DEMO_USER_PASSWORD = os.getenv('DEMO_USER_PASSWORD', 'demo123')
+    # Logging
+    LOG_LEVEL = 'INFO'
+    LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    LOG_FILE = 'agri_risk.log'
+
+def get_config():
+    """Get the appropriate configuration based on environment."""
+    env = os.getenv('FLASK_ENV', 'development')
+    config_class = {
+        'development': DevelopmentConfig,
+        'testing': TestingConfig,
+        'production': ProductionConfig
+    }.get(env.lower(), Config)
+    
+    try:
+        config = config_class()
+        logger.info(f"Using {env} configuration")
+        return config
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {str(e)}")
+        raise
 
 class DevelopmentConfig(Config):
     """Development configuration."""
     DEBUG = True
     TESTING = False
+    
+    # Use simulated data for development
+    USE_SIMULATED_DATA = True
+    
+    # Development specific settings
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///agri_risk_dev.db'
+    CACHE_TYPE = 'simple'  # Use simple cache for development
+    LOG_LEVEL = 'DEBUG'
 
 class TestingConfig(Config):
     """Testing configuration."""
     DEBUG = False
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///test_data.db'
-    MODEL_PATH = 'test_model.joblib'
+    
+    # Use simulated data for testing
+    USE_SIMULATED_DATA = True
+    
+    # Testing specific settings
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    CACHE_TYPE = 'null'  # No caching in tests
+    LOG_LEVEL = 'INFO'
 
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
     TESTING = False
+    
+    # Use real data in production
+    USE_SIMULATED_DATA = False
+    
+    # Production specific settings
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
+    CACHE_TYPE = 'redis'
     LOG_LEVEL = 'WARNING'
+    
+    # Additional production settings
+    MAX_REQUESTS_PER_MINUTE = 100
+    RATE_LIMIT_WINDOW = 60  # seconds
+    REQUEST_TIMEOUT = 10  # seconds
+    
+    # Security settings
+    RATE_LIMIT_ENABLED = True
+    CORS_ENABLED = True
+    CORS_ORIGINS = ['*']  # In production, this should be restricted
+    
+    # Monitoring
+    MONITORING_ENABLED = True
+    METRICS_ENABLED = True
     
     # Ensure secret keys are set in production
     @classmethod

@@ -4,130 +4,139 @@ import pandas as pd
 import xgboost as xgb
 import logging
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.preprocessing import StandardScaler
 import joblib
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 import json
 from datetime import datetime
+from pathlib import Path
+import pickle
 
 from config import get_config
 from data.data_collector import DataCollector
 from data.feature_engineering import FeatureEngineer
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RiskAssessmentModel:
     """
     XGBoost model for predicting agricultural credit risk
     """
-    
+
     def __init__(self, model_path: Optional[str] = None):
-        """
-        Initialize the XGBoost model for risk assessment.
-        
-        Args:
-            model_path: Path to saved model file. If None, creates new model.
-        """
         self.model = None
         self.feature_importance = {}
         self.feature_names = []
-        
+        self.scaler = None
+        self.metrics = {}
+
+        self.base_dir = Path(__file__).parent
+        self.model_path = self.base_dir / 'xgboost_model.joblib'
+        self.scaler_path = self.base_dir / 'scaler.pkl'
+        self.metrics_path = self.base_dir / 'model_metrics.json'
+
         if model_path and os.path.exists(model_path):
             self.load_model(model_path)
         else:
             self._initialize_model()
-        
-        self.base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.model_path = os.path.join(self.base_dir, 'xgboost_model.joblib')
+
         self.data_collector = DataCollector(get_config())
         self.feature_engineer = FeatureEngineer()
-    
+
     def _initialize_model(self):
-        """Initialize a new XGBoost model with default parameters."""
+        """Initialize a new XGBoost model with default parameters.
+        
+        Returns:
+            None
+        """
         config = get_config()
         self.model = xgb.XGBClassifier(
             objective='binary:logistic',
-            n_estimators=config.MODEL_PARAMS['n_estimators'],
-            learning_rate=config.MODEL_PARAMS['learning_rate'],
             max_depth=config.MODEL_PARAMS['max_depth'],
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
+            learning_rate=config.MODEL_PARAMS['learning_rate'],
+            n_estimators=config.MODEL_PARAMS['n_estimators'],
+            random_state=config.MODEL_PARAMS['random_state'],
+            eval_metric='logloss',
+            use_label_encoder=False,
+            n_jobs=-1
         )
-    
-    def train(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, float]:
-        """
-        Train the XGBoost model.
+        self.scaler = StandardScaler()
+
+    def train_model(self, force_retrain: bool = False) -> Dict[str, float]:
+        """Train the XGBoost model using collected and engineered data.
         
         Args:
-            X: Feature matrix
-            y: Target variable (0: no default, 1: default)
+            force_retrain: If True, retrain even if model exists
             
         Returns:
-            Dictionary containing training metrics
+            Dictionary of training metrics
         """
-        try:
-            self.feature_names = X.columns.tolist()
-            logger.info(f"Training with features: {self.feature_names}")
-            logger.info(f"Training X shape: {X.shape}, y: {y}")
-            
-            # Train the model
-            self.model.fit(X, y)
-            logger.info(f"Model fit complete. Model: {self.model}")
-            
-            # Calculate predictions and metrics
-            y_pred = self.model.predict(X)
-            y_pred_proba = self.model.predict_proba(X)[:, 1]
-            
-            metrics = {
-                'accuracy': accuracy_score(y, y_pred),
-                'precision': precision_score(y, y_pred),
-                'recall': recall_score(y, y_pred),
-                'roc_auc': None  # Removed roc_auc_score as it was not defined
-            }
-            
-            # Calculate feature importance
-            self.feature_importance = dict(zip(
-                self.feature_names,
-                self.model.feature_importances_
-            ))
-            
-            logger.info(f"Model trained successfully. Metrics: {metrics}")
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"Error training model: {str(e)}")
-            raise
+        config = get_config()
+        data = self.data_collector.collect_all_data()
+        features, target = self.feature_engineer.prepare_training_data(data)
+
+        X = pd.DataFrame(features)
+        y = pd.Series(target)
+
+        X_scaled = self.scaler.fit_transform(X)
+
+        self.feature_names = X.columns.tolist()
+        logger.info(f"Training with features: {self.feature_names}")
+
+        self.model.fit(X_scaled, y)
+
+        y_pred = self.model.predict(X_scaled)
+        y_pred_proba = self.model.predict_proba(X_scaled)[:, 1]
+
+        metrics = {
+            'accuracy': accuracy_score(y, y_pred),
+            'precision': precision_score(y, y_pred),
+            'recall': recall_score(y, y_pred),
+            'roc_auc': None  # Placeholder for ROC-AUC if needed
+        }
+
+        self.feature_importance = dict(zip(self.feature_names, self.model.feature_importances_))
+        logger.info(f"Training complete. Metrics: {metrics}")
+
+        # Save model and scaler
+        self.save_model(str(self.model_path))
+        with open(self.scaler_path, 'wb') as f:
+            pickle.dump(self.scaler, f)
+
+        with open(self.metrics_path, 'w') as f:
+            json.dump(metrics, f)
+
+        return metrics
 
     def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, Dict[str, float]]:
-        """
-        Make predictions using the trained model.
+        """Make predictions using the trained model.
         
         Args:
-            X: DataFrame containing input features
+            X: Feature matrix as pandas DataFrame
             
         Returns:
-            Tuple of predictions and feature importance
+            Tuple of (prediction probabilities, feature importance dictionary)
         """
         if X.shape[0] == 0:
             raise ValueError("Input data cannot be empty")
-            
-        # Make predictions
-        y_pred_proba = self.model.predict_proba(X)[:, 1]
-        
-        # Get feature importance
+
+        X_scaled = self.scaler.transform(X)
+        y_pred_proba = self.model.predict_proba(X_scaled)[:, 1]
         self.feature_importance = dict(zip(X.columns, self.model.feature_importances_))
-        
+
         return y_pred_proba, self.feature_importance
 
     def save_model(self, path: str):
-        """
-        Save the trained model to disk.
+        """Save the trained model to disk.
         
         Args:
             path: Path to save the model
+            
+        Returns:
+            None
         """
         try:
             dir_name = os.path.dirname(path)
@@ -139,17 +148,18 @@ class RiskAssessmentModel:
                 'feature_importance': self.feature_importance
             }, path)
             logger.info(f"Model saved to {path}")
-            
         except Exception as e:
             logger.error(f"Error saving model: {str(e)}")
             raise
 
     def load_model(self, path: str):
-        """
-        Load a trained model from disk.
+        """Load a trained model from disk.
         
         Args:
             path: Path to saved model file
+            
+        Returns:
+            None
         """
         try:
             saved_data = joblib.load(path)
@@ -157,14 +167,12 @@ class RiskAssessmentModel:
             self.feature_names = saved_data['feature_names']
             self.feature_importance = saved_data['feature_importance']
             logger.info(f"Model loaded from {path}")
-            
         except Exception as e:
             logger.error(f"Error loading model: {str(e)}")
             raise
 
     def get_model_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of the model's configuration and performance.
+        """Get a summary of the model's configuration and performance.
         
         Returns:
             Dictionary containing model summary
@@ -177,66 +185,50 @@ class RiskAssessmentModel:
         }
 
     def predict_risk_score(self, location, crop, scenario):
-        """
-        Helper function to predict risk score for a given farmer
+        """Predict risk score for a given farmer.
         
         Args:
-            location (str): Farmer's location/region
-            crop (str): Crop type
-            scenario (str): Risk scenario
+            location: Farmer's location/region
+            crop: Type of crop
+            scenario: Risk scenario (e.g., 'normal', 'drought')
             
         Returns:
-            dict: Risk assessment results
+            Dictionary containing risk assessment results
         """
         try:
-            # Collect data
             weather_data = self.data_collector.collect_weather_data(location)
             yield_data = self.data_collector.collect_crop_yield_data(crop, location)
             price_data = self.data_collector.collect_commodity_prices(location)
-            
-            # Generate features
+
             features = self.feature_engineer.generate_features(yield_data, weather_data, price_data)
-            
-            # Convert features to DataFrame
             X = pd.DataFrame([features])
-            
-            # Make prediction
             y_pred_proba, feature_importance = self.predict(X)
-            
-            # Get risk category
+
             risk_score = float(y_pred_proba[0])
             risk_category = self.feature_engineer.get_risk_category(risk_score)
-            
-            # Generate explanation
             explanation = self.feature_engineer.generate_risk_explanation(
-                risk_category,
-                features,
-                scenario
+                risk_category, features, scenario
             )
-            
+
             return {
-                'risk_score': risk_score,
-                'risk_category': risk_category,
-                'explanation': explanation,
-                'feature_importance': feature_importance
+                'score': risk_score,
+                'category': risk_category,
+                'reason': explanation,
+                'feature_contributions': feature_importance
             }
-            
         except Exception as e:
             logger.error(f"Error predicting risk score: {str(e)}")
-            raise {
-                'error': str(e),
-                'score': 0.5,  # Default medium risk 
+            return {
+                'score': 0.5,
                 'category': 'unknown',
-                'reason': f"Unable to calculate risk due to error: {str(e)}"
+                'reason': f"Unable to calculate risk due to error: {str(e)}",
+                'feature_contributions': {}
             }
 
-
 if __name__ == "__main__":
-    # Example of running the model directly
     model = RiskAssessmentModel()
     model.train_model(force_retrain=True)
-    
-    # Generate sample input for testing
+
     test_features = {
         'avg_temperature': 26.5,
         'temp_variability': 2.3,
@@ -253,31 +245,21 @@ if __name__ == "__main__":
         'yield_variability': 0.35,
         'yield_trend': 0.005
     }
-    
-    # Run prediction on test data
+
     test_df = pd.DataFrame([test_features])
-    result = model.predict(test_df)
-    
-    # Print results
+    y_pred_proba, feature_importance = model.predict(test_df)
+
     logger.info("Risk Assessment Results:")
-    logger.info(f"Risk Score: {result['score']:.4f}")
-    logger.info("Feature Contributions:")
-    
-    # Sort features by contribution
-    sorted_contributions = sorted(
-        result['feature_contributions'].items(), 
-        key=lambda x: x[1], 
-        reverse=True
-    )
-    
+    logger.info(f"Risk Score: {y_pred_proba[0]:.4f}")
+    logger.info("Top Feature Contributions:")
+    sorted_contributions = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
     for feature, contribution in sorted_contributions[:5]:
         logger.info(f"  - {feature}: {contribution:.4f}")
-        
-    # Example of using the helper function
+
     logger.info("\nTesting helper function:")
-    sample_result = predict_risk_score(
-        location="Central Valley", 
-        crop="corn", 
+    sample_result = model.predict_risk_score(
+        location="Central Valley",
+        crop="corn",
         scenario="normal"
     )
     logger.info(f"Sample Risk Score: {sample_result['score']:.4f}")

@@ -8,11 +8,12 @@ import json
 import time
 from bs4 import BeautifulSoup
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from config import get_config
+from functools import lru_cache
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class DataCollector:
@@ -49,80 +50,27 @@ class DataCollector:
         
         # Headers for making requests
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Authorization': f'Bearer {self.data_gov_api_key}'
+            'Accept': 'application/json',
+            'api-key': self.data_gov_api_key
         }
         
-        # Cache for API responses
-        self.cache = {}
-        self.cache_timeout = timedelta(hours=1)
+        # Error handling configuration
+        self.max_retries = self.config.ERROR_HANDLING['max_retries']
+        self.retry_delay = self.config.ERROR_HANDLING['retry_delay']
+        self.timeout = self.config.ERROR_HANDLING['timeout']
         
-        # Default region and crop for MVP
-        self.default_region = self.config.DEFAULT_REGION
-        self.default_crop = self.config.DEFAULT_CROP
-    
-    def collect_weather_data(self, region=None, start_date=None, end_date=None, use_cache=True) -> pd.DataFrame:
-        """
-        Collect weather data from IMD (India Meteorological Department)
+        # Initialize cache
+        self._initialize_cache()
         
-        Args:
-            region: Name of the region (e.g., 'Gujarat')
-            start_date: Start date for data collection
-            end_date: End date for data collection
-            use_cache: Whether to use cached data if available
-            
+    def _initialize_cache(self):
+        """Initialize cache system.
+        
         Returns:
-            DataFrame containing weather data
+            None
         """
-        region = region or self.default_region
-        
-        # File path for cached data
-        cache_file = os.path.join(self.dataset_dir, f'{region.lower()}_weather.csv')
-        
-        # Check if we can use cached data
-        if use_cache and os.path.exists(cache_file):
-            # Check if the cache is recent (less than 24 hours old)
-            file_time = os.path.getmtime(cache_file)
-            if (time.time() - file_time) < 86400:  # 24 hours in seconds
-                logger.info(f"Using cached weather data for {region}")
-                return pd.read_csv(cache_file)
-        
-        try:
-            # For MVP, we'll attempt to scrape the IMD website
-            # This is a simplified approach - in production, you'd want to use their API if available
-            
-            # Convert region to state code for IMD
-            state_code = self._get_state_code(region)
-            
-            # IMD's regional weather page
-            url = f"{self.imd_base_url}/en/weather/regional/{state_code.lower()}"
-            
-            logger.info(f"Fetching weather data from IMD for {region} ({url})")
-            response = requests.get(url, headers=self.headers)
-            
-            if response.status_code == 200:
-                # Parse the HTML content
-                soup = BeautifulSoup(response.content, 'html.parser')
-                
-                # Extract weather data from the table
-                # This is a simplified approach - actual implementation will depend on IMD's HTML structure
-                weather_data = self._parse_imd_weather_table(soup, region)
-                
-                # Save to cache
-                weather_data.to_csv(cache_file, index=False)
-                
-                logger.info(f"Successfully collected weather data for {region}: {len(weather_data)} records")
-                return weather_data
-            else:
-                logger.warning(f"Failed to fetch weather data from IMD (status code: {response.status_code})")
-                # Fall back to simulated data if web scraping fails
-                return self._generate_simulated_weather_data(region)
-                
-        except Exception as e:
-            logger.error(f"Error collecting weather data: {str(e)}")
-            # Fall back to simulated data
-            logger.info("Falling back to simulated weather data")
-            return self._generate_simulated_weather_data(region)
+        # Use in-memory cache for development
+        self.cache = {}
+        logger.info("In-memory cache initialized")
     
     def collect_crop_price_data(self, crop=None, region=None, start_date=None, end_date=None, use_cache=True) -> pd.DataFrame:
         """
