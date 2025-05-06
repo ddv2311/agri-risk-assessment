@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { useScenario } from '../context/ScenarioContext';
 import { 
-  TextField, Button, Box, FormControl, InputLabel, Select, MenuItem, 
-  Grid, Typography, Paper, Divider, Autocomplete, CircularProgress,
-  FormHelperText, Stepper, Step, StepLabel, Card, CardContent, Alert
+  TextField, Button, Box, FormControl, 
+  Typography, Autocomplete, CircularProgress, Paper,
+  FormHelperText, Stepper, Step, StepLabel, Card, CardContent
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
 import WaterDropIcon from '@mui/icons-material/WaterDrop';
@@ -27,6 +27,7 @@ const CROPS = [
   'Pulses', 'Oilseeds', 'Vegetables', 'Fruits', 'Spices'
 ];
 
+// Define scenarios with clear values for selection
 const SCENARIOS = [
   { value: 'normal', label: 'Normal', icon: <WaterDropIcon />, description: 'Regular weather conditions with adequate rainfall' },
   { value: 'drought', label: 'Drought', icon: <WbSunnyIcon />, description: 'Low rainfall and water scarcity conditions' },
@@ -34,17 +35,29 @@ const SCENARIOS = [
   { value: 'pest', label: 'Pest Infestation', icon: <PestControlIcon />, description: 'High pest pressure affecting crop health' }
 ];
 
+// No longer needed - removed to fix lint warning
+
 const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => {
+  // Get scenario state from context
+  const { scenario, setScenario } = useScenario();
+  
+  // Initialize form data with the scenario from context
   const [formData, setFormData] = useState({
     location: '',
     crop: '',
-    scenario: 'normal',
+    scenario: scenario, // Use the scenario from context
   });
+  
+  // Update form data when scenario changes in context
+  React.useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      scenario: scenario
+    }));
+  }, [scenario]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
-
-  const navigate = useNavigate();
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -57,10 +70,19 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData({
+    console.log(`Updating ${field} to:`, value);
+    
+    // Create a new form data object with the updated field
+    const updatedFormData = {
       ...formData,
       [field]: value,
-    });
+    };
+    
+    // Log the updated form data
+    console.log('Updated form data:', updatedFormData);
+    
+    // Update the state
+    setFormData(updatedFormData);
     
     // Clear error when user types
     if (errors[field]) {
@@ -79,10 +101,20 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
     setIsSubmitting(true);
     
     try {
-      // Simulate API call
+      // Simulate API call (in a real app, this would be an actual API call)
       await new Promise(resolve => setTimeout(resolve, 1500));
-      onSubmit(formData);
-      navigate('/results');
+      
+      // Prepare the submission data with the current state values
+      const submissionData = {
+        location: formData.location,
+        crop: formData.crop,
+        scenario: scenario // Use the scenario from context
+      };
+      
+      // Submit the form data to parent component
+      onSubmit(submissionData);
+      
+      // No need to navigate here as the parent component handles navigation
     } catch (error) {
       console.error('Error submitting form:', error);
     } finally {
@@ -180,22 +212,50 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
                 Select the environmental scenario you want to assess risk for. This helps us calculate
                 the potential impact on your agricultural activity.
               </Typography>
-              <FormControl fullWidth error={!!errors.scenario}>
-                <InputLabel>Scenario</InputLabel>
-                <Select
-                  value={formData.scenario}
-                  label="Scenario"
-                  onChange={(e) => handleChange('scenario', e.target.value)}
-                >
-                  {SCENARIOS.map((scenario) => (
-                    <MenuItem key={scenario.value} value={scenario.value}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ mr: 1 }}>{scenario.icon}</Box>
+              
+              {/* Radio button group for scenario selection */}
+              <FormControl component="fieldset" error={!!errors.scenario}>
+                {SCENARIOS.map((scenario) => (
+                  <Box 
+                    key={scenario.value} 
+                    onClick={() => {
+                      // Update both context and local form data
+                      setScenario(scenario.value);
+                      setFormData(prevData => ({
+                        ...prevData,
+                        scenario: scenario.value
+                      }));
+                    }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      p: 2,
+                      mb: 1,
+                      border: '1px solid',
+                      borderColor: formData.scenario === scenario.value ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      bgcolor: formData.scenario === scenario.value ? 'primary.light' : 'background.paper',
+                      color: formData.scenario === scenario.value ? 'primary.contrastText' : 'text.primary',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        bgcolor: formData.scenario === scenario.value ? 'primary.light' : 'action.hover',
+                      }
+                    }}
+                  >
+                    <Box sx={{ mr: 2, color: formData.scenario === scenario.value ? 'inherit' : 'primary.main' }}>
+                      {scenario.icon}
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: formData.scenario === scenario.value ? 'bold' : 'regular' }}>
                         {scenario.label}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
+                      </Typography>
+                      <Typography variant="body2" color={formData.scenario === scenario.value ? 'inherit' : 'text.secondary'}>
+                        {scenario.description}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
                 {errors.scenario && <FormHelperText>{errors.scenario}</FormHelperText>}
               </FormControl>
               
