@@ -26,6 +26,36 @@ class Config:
     # Model settings
     MODEL_PATH = os.getenv('MODEL_PATH', 'models/risk_assessment_model.joblib')
     
+    # Data collection settings
+    DEFAULT_REGION = 'Gujarat'
+    DEFAULT_CROP = 'wheat'
+    
+    # API keys
+    DATA_GOV_API_KEY = os.getenv('DATA_GOV_API_KEY', 'your-data-gov-api-key')
+    IMD_API_KEY = os.getenv('IMD_API_KEY', 'your-imd-api-key')
+    
+    # Model parameters
+    MODEL_PARAMS = {
+        'n_estimators': 100,
+        'learning_rate': 0.1,
+        'max_depth': 3
+    }
+    
+    # Feature engineering settings
+    FEATURES = [
+        'crop_yield_variability',
+        'rainfall_deviation',
+        'temperature_anomalies',
+        'price_volatility'
+    ]
+    
+    # Risk score thresholds
+    RISK_THRESHOLDS = {
+        'low': (0.0, 0.33),
+        'medium': (0.33, 0.66),
+        'high': (0.66, 1.0)
+    }
+    
     # Demo user
     DEMO_USER_USERNAME = os.getenv('DEMO_USER_USERNAME', 'demo@ignosis.ai')
     DEMO_USER_PASSWORD = os.getenv('DEMO_USER_PASSWORD', 'demo123')

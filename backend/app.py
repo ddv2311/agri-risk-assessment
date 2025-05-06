@@ -1,5 +1,5 @@
 """Main application module for the agricultural risk assessment API."""
-from flask import Flask
+from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 import os
 from dotenv import load_dotenv
@@ -34,16 +34,20 @@ def create_app(config_name='development'):
     
     # Initialize JWT
     jwt = JWTManager(app)
-    init_auth(app)
     
     # Register blueprints
-    app.register_blueprint(auth_bp, url_prefix='/api/v1')
+    app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     app.register_blueprint(api_bp, url_prefix='/api/v1')
+    
+    init_auth(app)
     
     # Add error handlers
     @app.errorhandler(404)
     def not_found(error):
-        return {'error': 'Not found'}, 404
+        return jsonify({
+            'error': 'Not found',
+            'message': str(error)
+        }), 404
     
     @app.errorhandler(500)
     def internal_error(error):

@@ -8,6 +8,8 @@ import json
 import time
 from bs4 import BeautifulSoup
 import re
+from typing import Dict, List, Optional, Tuple
+from config import get_config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -21,8 +23,14 @@ class DataCollector:
     - Agricultural Marketing Information Network (agmarknet.gov.in)
     """
     
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config=None):
+        """
+        Initialize the data collector.
+        
+        Args:
+            config: Configuration object. If None, uses default config.
+        """
+        self.config = config or get_config()
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.dataset_dir = os.path.join(self.base_dir, 'datasets')
         
@@ -35,19 +43,38 @@ class DataCollector:
         self.imd_base_url = "https://mausam.imd.gov.in"
         self.agmarknet_base_url = "https://agmarknet.gov.in"
         
-        # For MVP, we'll use a data.gov.in API key - in production this should be in config
-        self.data_gov_api_key = os.environ.get('DATA_GOV_API_KEY', 'your-api-key')
+        # API keys and credentials
+        self.data_gov_api_key = os.environ.get('DATA_GOV_API_KEY', self.config.DATA_GOV_API_KEY)
+        self.imd_api_key = os.environ.get('IMD_API_KEY', self.config.IMD_API_KEY)
         
-        # Headers for making requests (to avoid being blocked)
+        # Headers for making requests
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Authorization': f'Bearer {self.data_gov_api_key}'
         }
+        
+        # Cache for API responses
+        self.cache = {}
+        self.cache_timeout = timedelta(hours=1)
+        
+        # Default region and crop for MVP
+        self.default_region = self.config.DEFAULT_REGION
+        self.default_crop = self.config.DEFAULT_CROP
     
-    def collect_weather_data(self, region=None, start_date=None, end_date=None, use_cache=True):
+    def collect_weather_data(self, region=None, start_date=None, end_date=None, use_cache=True) -> pd.DataFrame:
         """
         Collect weather data from IMD (India Meteorological Department)
+        
+        Args:
+            region: Name of the region (e.g., 'Gujarat')
+            start_date: Start date for data collection
+            end_date: End date for data collection
+            use_cache: Whether to use cached data if available
+            
+        Returns:
+            DataFrame containing weather data
         """
-        region = region or self.config.DEFAULT_REGION
+        region = region or self.default_region
         
         # File path for cached data
         cache_file = os.path.join(self.dataset_dir, f'{region.lower()}_weather.csv')
@@ -97,12 +124,22 @@ class DataCollector:
             logger.info("Falling back to simulated weather data")
             return self._generate_simulated_weather_data(region)
     
-    def collect_crop_price_data(self, crop=None, region=None, start_date=None, end_date=None, use_cache=True):
+    def collect_crop_price_data(self, crop=None, region=None, start_date=None, end_date=None, use_cache=True) -> pd.DataFrame:
         """
         Collect crop price data from Agmarknet (Agricultural Marketing Information Network)
+        
+        Args:
+            crop: Name of the crop (e.g., 'wheat')
+            region: Name of the region (e.g., 'Gujarat')
+            start_date: Start date for data collection
+            end_date: End date for data collection
+            use_cache: Whether to use cached data if available
+            
+        Returns:
+            DataFrame containing crop price data
         """
-        crop = crop or self.config.DEFAULT_CROP
-        region = region or self.config.DEFAULT_REGION
+        crop = crop or self.default_crop
+        region = region or self.default_region
         
         # File path for cached data
         cache_file = os.path.join(self.dataset_dir, f'{crop.lower()}_{region.lower()}_prices.csv')
@@ -165,12 +202,20 @@ class DataCollector:
             logger.info("Falling back to simulated price data")
             return self._generate_simulated_price_data(crop, region)
     
-    def collect_crop_yield_data(self, crop=None, region=None, use_cache=True):
+    def collect_crop_yield_data(self, crop=None, region=None, use_cache=True) -> pd.DataFrame:
         """
         Collect crop yield data from data.gov.in
+        
+        Args:
+            crop: Name of the crop (e.g., 'wheat')
+            region: Name of the region (e.g., 'Gujarat')
+            use_cache: Whether to use cached data if available
+            
+        Returns:
+            DataFrame containing crop yield data
         """
-        crop = crop or self.config.DEFAULT_CROP
-        region = region or self.config.DEFAULT_REGION
+        crop = crop or self.default_crop
+        region = region or self.default_region
         
         # File path for cached data
         cache_file = os.path.join(self.dataset_dir, f'{crop.lower()}_{region.lower()}_yields.csv')

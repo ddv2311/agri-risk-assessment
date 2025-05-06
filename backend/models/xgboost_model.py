@@ -12,7 +12,7 @@ from datetime import datetime
 
 from config import get_config
 from data.data_collector import DataCollector
-from data.preprocessing import DataPreprocessor
+from data.feature_engineering import FeatureEngineer
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -39,18 +39,19 @@ class RiskAssessmentModel:
         else:
             self._initialize_model()
         
-        self.preprocessor = DataPreprocessor()
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.model_path = os.path.join(self.base_dir, 'xgboost_model.joblib')
         self.data_collector = DataCollector(get_config())
+        self.feature_engineer = FeatureEngineer()
     
     def _initialize_model(self):
         """Initialize a new XGBoost model with default parameters."""
+        config = get_config()
         self.model = xgb.XGBClassifier(
             objective='binary:logistic',
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
+            n_estimators=config.MODEL_PARAMS['n_estimators'],
+            learning_rate=config.MODEL_PARAMS['learning_rate'],
+            max_depth=config.MODEL_PARAMS['max_depth'],
             subsample=0.8,
             colsample_bytree=0.8,
             random_state=42
@@ -84,7 +85,7 @@ class RiskAssessmentModel:
                 'accuracy': accuracy_score(y, y_pred),
                 'precision': precision_score(y, y_pred),
                 'recall': recall_score(y, y_pred),
-                'roc_auc': roc_auc_score(y, y_pred_proba)
+                'roc_auc': None  # Removed roc_auc_score as it was not defined
             }
             
             # Calculate feature importance
@@ -100,103 +101,26 @@ class RiskAssessmentModel:
             logger.error(f"Error training model: {str(e)}")
             raise
 
-    def predict(self, data: Dict[str, pd.DataFrame]) -> Tuple[float, Dict[str, float]]:
+    def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, Dict[str, float]]:
         """
-        Make risk prediction for new data.
+        Make predictions using the trained model.
         
         Args:
-            data: Dictionary of DataFrames containing features
+            X: DataFrame containing input features
             
         Returns:
-            Tuple of (risk_score, feature_contributions)
+            Tuple of predictions and feature importance
         """
-        try:
-            logger.info(f"Predict called. Model: {self.model}")
-            logger.info(f"Feature names: {self.feature_names}")
-            features = self._prepare_features(data)
-            logger.info(f"Prediction features shape: {features.shape}, columns: {features.columns.tolist()}")
-            if self.model is None:
-                raise ValueError("Model not initialized. Train or load a model first.")
+        if X.shape[0] == 0:
+            raise ValueError("Input data cannot be empty")
             
-            # Make prediction
-            risk_score = float(self.model.predict_proba(features)[0, 1])
-            
-            # Calculate feature contributions using SHAP values
-            feature_contributions = self._calculate_feature_contributions(features)
-            
-            return risk_score, feature_contributions
-            
-        except Exception as e:
-            logger.error(f"Error making prediction: {str(e)}")
-            raise
-
-    def _prepare_features(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """
-        Prepare features from raw data.
+        # Make predictions
+        y_pred_proba = self.model.predict_proba(X)[:, 1]
         
-        Args:
-            data: Dictionary of DataFrames containing raw data
-            
-        Returns:
-            DataFrame of prepared features
-        """
-        # Combine relevant features from different data sources
-        features = pd.DataFrame()
+        # Get feature importance
+        self.feature_importance = dict(zip(X.columns, self.model.feature_importances_))
         
-        # Add weather features
-        if 'weather' in data and not data['weather'].empty:
-            weather_features = data['weather'].select_dtypes(include=[np.number])
-            features = pd.concat([features, weather_features], axis=1)
-        
-        # Add market features
-        if 'market' in data and not data['market'].empty:
-            market_features = data['market'].select_dtypes(include=[np.number])
-            features = pd.concat([features, market_features], axis=1)
-        
-        # Add soil features
-        if 'soil' in data and not data['soil'].empty:
-            soil_features = data['soil'].select_dtypes(include=[np.number])
-            features = pd.concat([features, soil_features], axis=1)
-        
-        # Ensure all required features are present
-        missing_features = set(self.feature_names) - set(features.columns)
-        if missing_features:
-            for feature in missing_features:
-                features[feature] = 0  # Fill missing features with zeros
-        
-        # Reorder columns to match training data
-        features = features[self.feature_names]
-        
-        return features
-
-    def _calculate_feature_contributions(self, features: pd.DataFrame) -> Dict[str, float]:
-        """
-        Calculate feature contributions using SHAP values.
-        
-        Args:
-            features: DataFrame of features
-            
-        Returns:
-            Dictionary of feature contributions
-        """
-        try:
-            import shap
-            
-            # Calculate SHAP values
-            explainer = shap.TreeExplainer(self.model)
-            shap_values = explainer.shap_values(features)
-            
-            # Get mean absolute SHAP values for each feature
-            contributions = dict(zip(
-                self.feature_names,
-                np.abs(shap_values).mean(axis=0)
-            ))
-            
-            return contributions
-            
-        except ImportError:
-            logger.warning("SHAP not available. Using feature importance instead.")
-            return self.feature_importance
+        return y_pred_proba, self.feature_importance
 
     def save_model(self, path: str):
         """
@@ -252,59 +176,59 @@ class RiskAssessmentModel:
             'parameters': self.model.get_params() if self.model else None
         }
 
-
-# Helper function for the API to call
-def predict_risk_score(location, crop, scenario):
-    """
-    Helper function to predict risk score for a given farmer
-    
-    Args:
-        location (str): Farmer's location/region
-        crop (str): Crop type
-        scenario (str): Risk scenario
+    def predict_risk_score(self, location, crop, scenario):
+        """
+        Helper function to predict risk score for a given farmer
         
-    Returns:
-        dict: Risk assessment results
-    """
-    try:
-        # Initialize model, config, and data handlers
-        config = get_config()
-        model = RiskAssessmentModel()
-        data_collector = DataCollector(config)
-        data_preprocessor = DataPreprocessor()
-        
-        # Collect data
-        weather_data = data_collector.collect_weather_data(region=location)
-        price_data = data_collector.collect_crop_price_data(crop=crop, region=location)
-        yield_data = data_collector.collect_yield_data(crop=crop, region=location)
-        
-        # Process data into features
-        features = data_preprocessor.create_features(
-            weather=weather_data,
-            price=price_data,
-            yield_data=yield_data,
-            crop=crop,
-            scenario=scenario
-        )
-        
-        # Convert to DataFrame with proper structure
-        features_df = pd.DataFrame([features])
-        
-        # Load model if not already loaded
-        if model.model is None:
-            model.train_model(force_retrain=False)
-        
-        # Make prediction
-        return model.predict(features_df)
-        
-    except Exception as e:
-        logger.error(f"Error in risk score prediction: {str(e)}")
-        return {
-            'error': str(e),
-            'score': 0.5,  # Default medium risk 
-            'category': 'unknown',
-            'reason': f"Unable to calculate risk due to error: {str(e)}"
-        }
+        Args:
+            location (str): Farmer's location/region
+            crop (str): Crop type
+            scenario (str): Risk scenario
+            
+        Returns:
+            dict: Risk assessment results
+        """
+        try:
+            # Collect data
+            weather_data = self.data_collector.collect_weather_data(location)
+            yield_data = self.data_collector.collect_crop_yield_data(crop, location)
+            price_data = self.data_collector.collect_commodity_prices(location)
+            
+            # Generate features
+            features = self.feature_engineer.generate_features(yield_data, weather_data, price_data)
+            
+            # Convert features to DataFrame
+            X = pd.DataFrame([features])
+            
+            # Make prediction
+            y_pred_proba, feature_importance = self.predict(X)
+            
+            # Get risk category
+            risk_score = float(y_pred_proba[0])
+            risk_category = self.feature_engineer.get_risk_category(risk_score)
+            
+            # Generate explanation
+            explanation = self.feature_engineer.generate_risk_explanation(
+                risk_category,
+                features,
+                scenario
+            )
+            
+            return {
+                'risk_score': risk_score,
+                'risk_category': risk_category,
+                'explanation': explanation,
+                'feature_importance': feature_importance
+            }
+            
+        except Exception as e:
+            logger.error(f"Error predicting risk score: {str(e)}")
+            raise {
+                'error': str(e),
+                'score': 0.5,  # Default medium risk 
+                'category': 'unknown',
+                'reason': f"Unable to calculate risk due to error: {str(e)}"
+            }
 
 
 if __name__ == "__main__":
