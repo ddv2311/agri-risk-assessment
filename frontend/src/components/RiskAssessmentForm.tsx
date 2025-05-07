@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   TextField, Button, Box, FormControl, 
   Typography, Autocomplete, CircularProgress, Paper,
-  FormHelperText, Stepper, Step, StepLabel, Card, CardContent
+  FormHelperText, Stepper, Step, StepLabel, Card, CardContent,
+  Grid, Avatar, Fade, Grow, Zoom, Alert, Chip,
+  useTheme, alpha
 } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
@@ -10,6 +12,10 @@ import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import PestControlIcon from '@mui/icons-material/PestControl';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useScenario } from '../context/ScenarioContext';
 import { riskService } from '../services/api';
 
@@ -17,26 +23,71 @@ interface RiskAssessmentFormProps {
   onSubmit: (formData: any) => void;
 }
 
-// Sample data for dropdowns
+// Sample data for dropdowns with additional metadata
 const LOCATIONS = [
-  'Maharashtra', 'Punjab', 'Haryana', 'Uttar Pradesh', 'Karnataka', 
-  'Tamil Nadu', 'Andhra Pradesh', 'Gujarat', 'West Bengal', 'Madhya Pradesh'
+  { id: 'mh', name: 'Maharashtra', riskFactor: 0.8, climateZone: 'Semi-arid' },
+  { id: 'pb', name: 'Punjab', riskFactor: 0.7, climateZone: 'Sub-tropical' },
+  { id: 'hr', name: 'Haryana', riskFactor: 0.7, climateZone: 'Sub-tropical' },
+  { id: 'up', name: 'Uttar Pradesh', riskFactor: 0.75, climateZone: 'Sub-tropical' },
+  { id: 'ka', name: 'Karnataka', riskFactor: 0.65, climateZone: 'Tropical wet & dry' },
+  { id: 'tn', name: 'Tamil Nadu', riskFactor: 0.6, climateZone: 'Tropical wet' },
+  { id: 'ap', name: 'Andhra Pradesh', riskFactor: 0.7, climateZone: 'Tropical wet & dry' },
+  { id: 'gj', name: 'Gujarat', riskFactor: 0.85, climateZone: 'Arid to semi-arid' },
+  { id: 'wb', name: 'West Bengal', riskFactor: 0.6, climateZone: 'Tropical wet' },
+  { id: 'mp', name: 'Madhya Pradesh', riskFactor: 0.75, climateZone: 'Sub-tropical' }
 ];
 
 const CROPS = [
-  'Rice', 'Wheat', 'Cotton', 'Sugarcane', 'Maize', 
-  'Pulses', 'Oilseeds', 'Vegetables', 'Fruits', 'Spices'
+  { id: 'rice', name: 'Rice', waterRequirement: 'High', growthDuration: '3-6 months', droughtSensitivity: 'High' },
+  { id: 'wheat', name: 'Wheat', waterRequirement: 'Medium', growthDuration: '4-5 months', droughtSensitivity: 'Medium' },
+  { id: 'cotton', name: 'Cotton', waterRequirement: 'Medium', growthDuration: '5-6 months', droughtSensitivity: 'Medium' },
+  { id: 'sugarcane', name: 'Sugarcane', waterRequirement: 'High', growthDuration: '12-18 months', droughtSensitivity: 'Medium' },
+  { id: 'maize', name: 'Maize', waterRequirement: 'Medium', growthDuration: '3-4 months', droughtSensitivity: 'Medium' },
+  { id: 'pulses', name: 'Pulses', waterRequirement: 'Low', growthDuration: '3-4 months', droughtSensitivity: 'Low' },
+  { id: 'oilseeds', name: 'Oilseeds', waterRequirement: 'Low', growthDuration: '3-5 months', droughtSensitivity: 'Low' },
+  { id: 'vegetables', name: 'Vegetables', waterRequirement: 'Medium-High', growthDuration: '2-4 months', droughtSensitivity: 'High' },
+  { id: 'fruits', name: 'Fruits', waterRequirement: 'Medium-High', growthDuration: 'Perennial', droughtSensitivity: 'Medium' },
+  { id: 'spices', name: 'Spices', waterRequirement: 'Medium', growthDuration: '4-8 months', droughtSensitivity: 'Medium' }
 ];
 
 // Define scenarios with clear values for selection
 const SCENARIOS = [
-  { value: 'normal', label: 'Normal Conditions', icon: <WbSunnyIcon />, description: 'Standard weather and market conditions' },
-  { value: 'drought', label: 'Drought', icon: <WbSunnyIcon />, description: 'Extended period of abnormally low rainfall' },
-  { value: 'flood', label: 'Flood', icon: <WaterDropIcon />, description: 'Overflow of water that submerges land' },
-  { value: 'pest', label: 'Pest Infestation', icon: <PestControlIcon />, description: 'Destructive insect outbreak affecting crops' }
+  { 
+    value: 'normal', 
+    label: 'Normal Conditions', 
+    icon: <WbSunnyIcon />, 
+    description: 'Standard weather and market conditions',
+    color: '#4caf50',
+    bgColor: '#e8f5e9'
+  },
+  { 
+    value: 'drought', 
+    label: 'Drought', 
+    icon: <WbSunnyIcon />, 
+    description: 'Extended period of abnormally low rainfall',
+    color: '#ff9800',
+    bgColor: '#fff3e0'
+  },
+  { 
+    value: 'flood', 
+    label: 'Flood', 
+    icon: <WaterDropIcon />, 
+    description: 'Overflow of water that submerges land',
+    color: '#2196f3',
+    bgColor: '#e3f2fd'
+  },
+  { 
+    value: 'pest', 
+    label: 'Pest Infestation', 
+    icon: <PestControlIcon />, 
+    description: 'Destructive insect outbreak affecting crops',
+    color: '#f44336',
+    bgColor: '#ffebee'
+  }
 ];
 
 const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => {
+  const theme = useTheme();
   // Get scenario state from context
   const { scenario, setScenario } = useScenario();
   
@@ -53,6 +104,7 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  const [completed, setCompleted] = useState<Record<number, boolean>>({});
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -79,6 +131,17 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
     // Update the state
     setFormData(updatedFormData);
     
+    // Mark step as completed if value is present
+    if (value) {
+      if (field === 'location' && activeStep === 0) {
+        setCompleted({ ...completed, 0: true });
+      } else if (field === 'crop' && activeStep === 1) {
+        setCompleted({ ...completed, 1: true });
+      } else if (field === 'scenario' && activeStep === 2) {
+        setCompleted({ ...completed, 2: true });
+      }
+    }
+    
     // Clear error when user types
     if (errors[field]) {
       setErrors({
@@ -86,6 +149,21 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
         [field]: ''
       });
     }
+  };
+  
+  // Get the location object from the selected location name
+  const getLocationObject = () => {
+    return LOCATIONS.find(loc => loc.name === formData.location) || null;
+  };
+  
+  // Get the crop object from the selected crop name
+  const getCropObject = () => {
+    return CROPS.find(crop => crop.name === formData.crop) || null;
+  };
+  
+  // Get the scenario object from the selected scenario value
+  const getScenarioObject = () => {
+    return SCENARIOS.find(s => s.value === formData.scenario) || null;
   };
 
   // Log the current scenario before submission for debugging
@@ -114,24 +192,36 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
     setIsSubmitting(true);
     
     try {
+      // Get the full objects for enhanced data
+      const locationObj = getLocationObject();
+      const cropObj = getCropObject();
+      const scenarioObj = getScenarioObject();
+      
       // Prepare the submission data with the current state values
       // Explicitly use the scenario from form data to ensure it's correct
       const submissionData = {
         location: formData.location,
         crop: formData.crop,
-        scenario: selectedScenario // Use the scenario from form data
+        scenario: selectedScenario, // Use the scenario from form data
+        locationDetails: locationObj,
+        cropDetails: cropObj,
+        scenarioDetails: scenarioObj
       };
       
       console.log('Final submission data:', submissionData);
       
       try {
         // Attempt to make the actual API call to assess risk
-        const riskData = await riskService.assessRisk(submissionData);
+        const riskData = await riskService.assessRisk({
+          location: formData.location,
+          crop: formData.crop,
+          scenario: selectedScenario
+        });
         
         // Submit the form data and risk assessment results to parent component
         // Make sure to use the selectedScenario from form data
         onSubmit({
-          ...submissionData, // This includes the correct scenario
+          ...submissionData, // This includes the correct scenario and enhanced data
           riskData: riskData
         });
         
@@ -175,147 +265,365 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
       setErrors({ ...errors, crop: 'Please select a crop' });
       return;
     }
+    
+    // Mark current step as completed if it has a value
+    if ((activeStep === 0 && formData.location) ||
+        (activeStep === 1 && formData.crop) ||
+        (activeStep === 2 && formData.scenario)) {
+      setCompleted({ ...completed, [activeStep]: true });
+    }
+    
     setActiveStep((prevStep) => prevStep + 1);
   };
 
   const handleBack = () => {
     setActiveStep((prevStep) => prevStep - 1);
   };
+  
+  // Check if all steps are completed
+  const isStepComplete = (step: number) => {
+    return completed[step];
+  };
 
   const getStepContent = (step: number) => {
     switch (step) {
       case 0:
         return (
-          <Card variant="outlined" sx={{ mb: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <LocationOnIcon color="primary" sx={{ mr: 1 }} />
+          <Grow in={activeStep === 0} timeout={500}>
+            <Card elevation={3} sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', width: '100%' }}>
+              <Box sx={{ 
+                bgcolor: 'primary.main', 
+                color: 'white', 
+                p: 2, 
+                display: 'flex', 
+                alignItems: 'center' 
+              }}>
+                <Avatar sx={{ bgcolor: 'white', color: 'primary.main', mr: 2 }}>
+                  <LocationOnIcon />
+                </Avatar>
                 <Typography variant="h6">Location Information</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Select the region where your agricultural activity is located. This helps us analyze
-                regional climate patterns and risks specific to your area.
-              </Typography>
-              <Autocomplete
-                options={LOCATIONS}
-                value={formData.location}
-                onChange={(_, newValue) => handleChange('location', newValue)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Location" 
-                    required 
-                    error={!!errors.location}
-                    helperText={errors.location}
-                    fullWidth
-                  />
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Select the region where your agricultural activity is located. This helps us analyze
+                  regional climate patterns and risks specific to your area.
+                </Typography>
+                
+                <Autocomplete
+                  options={LOCATIONS}
+                  getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                  value={getLocationObject()}
+                  onChange={(_, newValue) => handleChange('location', newValue ? newValue.name : '')}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Location" 
+                      required 
+                      error={!!errors.location}
+                      helperText={errors.location}
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <LocationOnIcon color="primary" sx={{ ml: 1, mr: 0.5 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="subtitle1">{option.name}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                          <Chip 
+                            label={option.climateZone} 
+                            size="small" 
+                            sx={{ mr: 1, bgcolor: alpha(theme.palette.primary.main, 0.1) }} 
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            Risk Factor: {option.riskFactor.toFixed(1)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  )}
+                />
+                
+                {formData.location && (
+                  <Fade in={!!formData.location} timeout={500}>
+                    <Box sx={{ mt: 3, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom color="primary.main">
+                        Selected Location: {formData.location}
+                      </Typography>
+                      {getLocationObject() && (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 1 }}>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Climate Zone: {getLocationObject()?.climateZone}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Risk Factor: {getLocationObject()?.riskFactor.toFixed(1)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </Fade>
                 )}
-              />
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Grow>
         );
       case 1:
         return (
-          <Card variant="outlined" sx={{ mb: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <AgricultureIcon color="primary" sx={{ mr: 1 }} />
+          <Grow in={activeStep === 1} timeout={500}>
+            <Card elevation={3} sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', width: '100%' }}>
+              <Box sx={{ 
+                bgcolor: 'primary.main', 
+                color: 'white', 
+                p: 2, 
+                display: 'flex', 
+                alignItems: 'center' 
+              }}>
+                <Avatar sx={{ bgcolor: 'white', color: 'primary.main', mr: 2 }}>
+                  <AgricultureIcon />
+                </Avatar>
                 <Typography variant="h6">Crop Information</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Different crops have varying susceptibility to environmental risks. Select your crop to
-                receive tailored risk assessment based on crop-specific vulnerabilities.
-              </Typography>
-              <Autocomplete
-                options={CROPS}
-                value={formData.crop}
-                onChange={(_, newValue) => handleChange('crop', newValue)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Crop Type" 
-                    required
-                    error={!!errors.crop}
-                    helperText={errors.crop}
-                    fullWidth
-                  />
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Different crops have varying susceptibility to environmental risks. Select your crop to
+                  receive tailored risk assessment based on crop-specific vulnerabilities.
+                </Typography>
+                
+                <Autocomplete
+                  options={CROPS}
+                  getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
+                  value={getCropObject()}
+                  onChange={(_, newValue) => handleChange('crop', newValue ? newValue.name : '')}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Crop Type" 
+                      required
+                      error={!!errors.crop}
+                      helperText={errors.crop}
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <AgricultureIcon color="primary" sx={{ ml: 1, mr: 0.5 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="subtitle1">{option.name}</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                          <Chip 
+                            label={`Water: ${option.waterRequirement}`} 
+                            size="small" 
+                            sx={{ bgcolor: alpha(theme.palette.info.main, 0.1) }} 
+                          />
+                          <Chip 
+                            label={`Growth: ${option.growthDuration}`} 
+                            size="small" 
+                            sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }} 
+                          />
+                          <Chip 
+                            label={`Drought Sensitivity: ${option.droughtSensitivity}`} 
+                            size="small" 
+                            sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1) }} 
+                          />
+                        </Box>
+                      </Box>
+                    </Box>
+                  )}
+                />
+                
+                {formData.crop && (
+                  <Fade in={!!formData.crop} timeout={500}>
+                    <Box sx={{ mt: 3, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom color="primary.main">
+                        Selected Crop: {formData.crop}
+                      </Typography>
+                      {getCropObject() && (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mt: 1 }}>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Water Requirement: {getCropObject()?.waterRequirement}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Growth Duration: {getCropObject()?.growthDuration}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Drought Sensitivity: {getCropObject()?.droughtSensitivity}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </Fade>
                 )}
-              />
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Grow>
         );
       case 2:
         return (
-          <Card variant="outlined" sx={{ mb: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <WaterDropIcon color="primary" sx={{ mr: 1 }} />
+          <Grow in={activeStep === 2} timeout={500}>
+            <Card elevation={3} sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', width: '100%' }}>
+              <Box sx={{ 
+                bgcolor: 'primary.main', 
+                color: 'white', 
+                p: 2, 
+                display: 'flex', 
+                alignItems: 'center' 
+              }}>
+                <Avatar sx={{ bgcolor: 'white', color: 'primary.main', mr: 2 }}>
+                  <WaterDropIcon />
+                </Avatar>
                 <Typography variant="h6">Scenario Selection</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Select the environmental scenario you want to assess risk for. This helps us calculate
-                the potential impact on your agricultural activity.
-              </Typography>
-              
-              {/* Radio button group for scenario selection */}
-              <FormControl component="fieldset" error={!!errors.scenario}>
-                {SCENARIOS.map((scenarioOption) => (
-                  <Box 
-                    key={scenarioOption.value} 
-                    onClick={() => {
-                      console.log('Selected scenario:', scenarioOption.value);
-                      // Update both context and local form data
-                      setScenario(scenarioOption.value);
-                      setFormData(prevData => ({
-                        ...prevData,
-                        scenario: scenarioOption.value
-                      }));
-                      // Log the updated scenario selection
-                      console.log('Updated scenario selection to:', scenarioOption.value);
-                    }}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      p: 2,
-                      mb: 1,
-                      border: '1px solid',
-                      borderColor: formData.scenario === scenarioOption.value ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      bgcolor: formData.scenario === scenarioOption.value ? 'primary.light' : 'background.paper',
-                      color: formData.scenario === scenarioOption.value ? 'primary.contrastText' : 'text.primary',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        bgcolor: formData.scenario === scenarioOption.value ? 'primary.light' : 'action.hover',
-                      }
-                    }}
-                  >
-                    <Box sx={{ mr: 2, color: formData.scenario === scenarioOption.value ? 'inherit' : 'primary.main' }}>
-                      {scenarioOption.icon}
-                    </Box>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 2 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: formData.scenario === scenarioOption.value ? 'bold' : 'regular' }}>
-                        {scenarioOption.label}
-                      </Typography>
-                      <Typography variant="body2" color={formData.scenario === scenarioOption.value ? 'inherit' : 'text.secondary'}>
-                        {scenarioOption.description}
-                      </Typography>
-                    </Box>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Select the environmental scenario you want to assess risk for. This helps us calculate
+                  the potential impact on your agricultural activity.
+                </Typography>
+                
+                {/* Scenario selection cards */}
+                <FormControl component="fieldset" error={!!errors.scenario} sx={{ width: '100%' }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                    {SCENARIOS.map((scenarioOption) => (
+                      <Box key={scenarioOption.value}>
+                        <Zoom in={true} style={{ transitionDelay: '100ms' }}>
+                          <Card 
+                            elevation={formData.scenario === scenarioOption.value ? 3 : 1}
+                            onClick={() => {
+                              console.log('Selected scenario:', scenarioOption.value);
+                              // Update both context and local form data
+                              setScenario(scenarioOption.value);
+                              setFormData(prevData => ({
+                                ...prevData,
+                                scenario: scenarioOption.value
+                              }));
+                              setCompleted({ ...completed, 2: true });
+                              // Log the updated scenario selection
+                              console.log('Updated scenario selection to:', scenarioOption.value);
+                            }}
+                            sx={{
+                              p: 2,
+                              height: '100%',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              borderLeft: '4px solid',
+                              borderColor: scenarioOption.color,
+                              bgcolor: formData.scenario === scenarioOption.value ? 
+                                scenarioOption.bgColor : 'background.paper',
+                              '&:hover': {
+                                transform: 'translateY(-4px)',
+                                boxShadow: 4
+                              }
+                            }}
+                          >
+                            <Box sx={{ 
+                              display: 'flex', 
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              width: '100%' 
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: { xs: 'wrap', sm: 'nowrap' }, width: '100%' }}>
+                                <Avatar 
+                                  sx={{ 
+                                    bgcolor: scenarioOption.bgColor, 
+                                    color: scenarioOption.color,
+                                    mr: 2,
+                                    mt: 0.5,
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {scenarioOption.icon}
+                                </Avatar>
+                                <Box sx={{ width: '100%' }}>
+                                  <Typography variant="h6" sx={{ 
+                                    color: formData.scenario === scenarioOption.value ? 
+                                      scenarioOption.color : 'text.primary',
+                                    fontWeight: formData.scenario === scenarioOption.value ? 600 : 400
+                                  }}>
+                                    {scenarioOption.label}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    {scenarioOption.description}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              {formData.scenario === scenarioOption.value && (
+                                <CheckCircleOutlineIcon sx={{ color: scenarioOption.color, flexShrink: 0, ml: 1 }} />
+                              )}
+                            </Box>
+                          </Card>
+                        </Zoom>
+                      </Box>
+                    ))}
                   </Box>
-                ))}
-                {errors.scenario && <FormHelperText>{errors.scenario}</FormHelperText>}
-              </FormControl>
-              
-              <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  {SCENARIOS.find(s => s.value === formData.scenario)?.label} Scenario:
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {SCENARIOS.find(s => s.value === formData.scenario)?.description}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
+                  {errors.scenario && (
+                    <FormHelperText error sx={{ mt: 2, fontSize: '0.9rem' }}>
+                      <ErrorOutlineIcon fontSize="small" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
+                      {errors.scenario}
+                    </FormHelperText>
+                  )}
+                </FormControl>
+                
+                {formData.scenario && (
+                  <Fade in={!!formData.scenario} timeout={500}>
+                    <Box sx={{ 
+                      mt: 3, 
+                      p: 2, 
+                      bgcolor: getScenarioObject()?.bgColor || alpha(theme.palette.primary.main, 0.05), 
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: getScenarioObject()?.color || theme.palette.divider
+                    }}>
+                      <Typography 
+                        variant="subtitle1" 
+                        gutterBottom 
+                        sx={{ 
+                          color: getScenarioObject()?.color || 'primary.main',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        {getScenarioObject()?.icon}
+                        <Box component="span" sx={{ ml: 1 }}>
+                          {getScenarioObject()?.label} Scenario Selected
+                        </Box>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {getScenarioObject()?.description}
+                      </Typography>
+                    </Box>
+                  </Fade>
+                )}
+              </CardContent>
+            </Card>
+          </Grow>
         );
       default:
         return null;
@@ -323,34 +631,114 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
   };
 
   return (
-    <Box>
-      <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 2, bgcolor: '#f8f9fa' }}>
-        <Typography variant="body1" color="text.secondary">
-          Complete the form below to receive a comprehensive risk assessment for your agricultural activity.
-          The assessment considers location-specific climate data, crop vulnerability, and scenario-based risk factors.
-        </Typography>
+    <Box sx={{ width: '100%' }}>
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: { xs: 2, sm: 3 }, 
+          mb: 3, 
+          borderRadius: 2, 
+          bgcolor: alpha(theme.palette.primary.main, 0.03),
+          borderLeft: `4px solid ${theme.palette.primary.main}`,
+          width: '100%'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+          <Avatar sx={{ bgcolor: theme.palette.primary.main, mr: 2, mb: { xs: 2, sm: 0 } }}>
+            <AgricultureIcon />
+          </Avatar>
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="h6" color="primary.main" gutterBottom>
+              Agricultural Risk Assessment
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Complete the form below to receive a comprehensive risk assessment for your agricultural activity.
+              The assessment considers location-specific climate data, crop vulnerability, and scenario-based risk factors.
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
       
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        <Step>
-          <StepLabel>Location</StepLabel>
+      <Stepper 
+        activeStep={activeStep} 
+        alternativeLabel
+        sx={{ 
+          mb: 3,
+          p: { xs: 1.5, sm: 2 },
+          bgcolor: 'white',
+          borderRadius: 2,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          width: '100%'
+        }}
+      >
+        <Step completed={isStepComplete(0)}>
+          <StepLabel StepIconProps={{ 
+            sx: { color: isStepComplete(0) ? 'success.main' : undefined } 
+          }}>
+            <Typography variant="subtitle2">
+              Location
+            </Typography>
+          </StepLabel>
         </Step>
-        <Step>
-          <StepLabel>Crop</StepLabel>
+        <Step completed={isStepComplete(1)}>
+          <StepLabel StepIconProps={{ 
+            sx: { color: isStepComplete(1) ? 'success.main' : undefined } 
+          }}>
+            <Typography variant="subtitle2">
+              Crop
+            </Typography>
+          </StepLabel>
         </Step>
-        <Step>
-          <StepLabel>Scenario</StepLabel>
+        <Step completed={isStepComplete(2)}>
+          <StepLabel StepIconProps={{ 
+            sx: { color: isStepComplete(2) ? 'success.main' : undefined } 
+          }}>
+            <Typography variant="subtitle2">
+              Scenario
+            </Typography>
+          </StepLabel>
         </Step>
       </Stepper>
       
-      <Box component="form" onSubmit={handleSubmit}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
         {getStepContent(activeStep)}
         
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+        {errors.submit && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => setErrors({ ...errors, submit: '' })}>
+                Dismiss
+              </Button>
+            }
+          >
+            {errors.submit}
+          </Alert>
+        )}
+        
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            mt: 3,
+            pt: 3,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            width: '100%',
+            flexWrap: { xs: 'wrap', sm: 'nowrap' },
+            gap: { xs: 2, sm: 0 }
+          }}
+        >
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}
             variant="outlined"
+            startIcon={<NavigateBeforeIcon />}
+            sx={{ 
+              borderRadius: 2,
+              px: 3
+            }}
           >
             Back
           </Button>
@@ -363,7 +751,16 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
                 color="primary"
                 disabled={isSubmitting || !formData.scenario} // Disable if no scenario selected
                 startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <CalculateIcon />}
-                sx={{ minWidth: 150 }}
+                sx={{ 
+                  minWidth: 180,
+                  borderRadius: 2,
+                  px: 3,
+                  py: 1,
+                  boxShadow: 2,
+                  '&:hover': {
+                    boxShadow: 4
+                  }
+                }}
               >
                 {isSubmitting ? 'Calculating...' : 'Calculate Risk'}
               </Button>
@@ -372,6 +769,12 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
                 variant="contained" 
                 color="primary" 
                 onClick={handleNext}
+                endIcon={<NavigateNextIcon />}
+                sx={{ 
+                  borderRadius: 2,
+                  px: 3
+                }}
+                disabled={activeStep === 0 && !formData.location || activeStep === 1 && !formData.crop}
               >
                 Next
               </Button>

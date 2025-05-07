@@ -71,8 +71,8 @@ function App() {
 // Separate component for content that needs router hooks
 function AppContent() {
   const [assessmentData, setAssessmentData] = useState<any>(null);
-  // We'll use the scenario context for setting values
-  const { setScenario } = useScenario();
+  // We'll use the scenario context for getting the current scenario value
+  const { scenario } = useScenario();
   const navigate = useNavigate();
 
   // Calculate risk score based on form data
