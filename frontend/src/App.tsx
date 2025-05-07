@@ -12,19 +12,146 @@ import { ScenarioProvider, useScenario } from './context/ScenarioContext';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1976d2',
+      main: '#1a73e8',
+      light: '#4285f4',
+      dark: '#0d47a1',
+      contrastText: '#ffffff',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#34a853',
+      light: '#4caf50',
+      dark: '#1b5e20',
+      contrastText: '#ffffff',
     },
     background: {
-      default: '#f8f9fa',
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#202124',
+      secondary: '#5f6368',
+    },
+    error: {
+      main: '#ea4335',
+    },
+    warning: {
+      main: '#fbbc05',
+      light: '#fdd663',
+      dark: '#f29900',
+    },
+    success: {
+      main: '#34a853',
+    },
+    action: {
+      hover: 'rgba(26, 115, 232, 0.08)',
+      selected: 'rgba(26, 115, 232, 0.16)',
+      disabled: 'rgba(0, 0, 0, 0.26)',
+      disabledBackground: 'rgba(0, 0, 0, 0.12)',
+    },
+    // Custom colors for data visualization
+    dataViz: {
+      low: '#34a853',
+      medium: '#fbbc05',
+      high: '#ea4335',
+      background: '#f8f9fa',
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h4: {
+    fontFamily: '"Google Sans", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontSize: '3.5rem',
+      fontWeight: 700,
+      lineHeight: 1.2,
+      letterSpacing: '-0.01562em',
+      marginBottom: '1.5rem',
+      '@media (max-width:600px)': {
+        fontSize: '2.5rem',
+      },
+    },
+    h2: {
+      fontSize: '3rem',
+      fontWeight: 700,
+      lineHeight: 1.3,
+      letterSpacing: '-0.00833em',
+      marginBottom: '1.25rem',
+      '@media (max-width:600px)': {
+        fontSize: '2.25rem',
+      },
+    },
+    h3: {
+      fontSize: '2.25rem',
       fontWeight: 600,
+      lineHeight: 1.3,
+      letterSpacing: '0em',
+      marginBottom: '1rem',
+      '@media (max-width:600px)': {
+        fontSize: '2rem',
+      },
+    },
+    h4: {
+      fontSize: '2rem',
+      fontWeight: 600,
+      lineHeight: 1.4,
+      letterSpacing: '0.00735em',
+      marginBottom: '1rem',
+      '@media (max-width:600px)': {
+        fontSize: '1.75rem',
+      },
+    },
+    h5: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      lineHeight: 1.4,
+      letterSpacing: '0em',
+      marginBottom: '0.75rem',
+      '@media (max-width:600px)': {
+        fontSize: '1.25rem',
+      },
+    },
+    h6: {
+      fontSize: '1.25rem',
+      fontWeight: 600,
+      lineHeight: 1.4,
+      letterSpacing: '0.0075em',
+      marginBottom: '0.5rem',
+      '@media (max-width:600px)': {
+        fontSize: '1.125rem',
+      },
+    },
+    subtitle1: {
+      fontSize: '1.25rem',
+      fontWeight: 500,
+      lineHeight: 1.5,
+      letterSpacing: '0.00938em',
+      color: '#5f6368',
+    },
+    subtitle2: {
+      fontSize: '1.125rem',
+      fontWeight: 500,
+      lineHeight: 1.57,
+      letterSpacing: '0.00714em',
+      color: '#5f6368',
+    },
+    body1: {
+      fontSize: '1.125rem',
+      fontWeight: 400,
+      lineHeight: 1.6,
+      letterSpacing: '0.00938em',
+      color: '#202124',
+    },
+    body2: {
+      fontSize: '1rem',
+      fontWeight: 400,
+      lineHeight: 1.5,
+      letterSpacing: '0.01071em',
+      color: '#5f6368',
+    },
+    button: {
+      fontSize: '1.125rem',
+      fontWeight: 600,
+      lineHeight: 1.75,
+      letterSpacing: '0.02857em',
+      textTransform: 'none',
     },
   },
   components: {
@@ -32,15 +159,133 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 8,
+          padding: '12px 32px',
+          textTransform: 'none',
+          fontWeight: 600,
+          boxShadow: 'none',
+          transition: 'all 0.2s ease-in-out',
+          '&:hover': {
+            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+            transform: 'translateY(-1px)',
+          },
+          '&:active': {
+            transform: 'translateY(0)',
+          },
+        },
+        contained: {
+          '&:hover': {
+            boxShadow: '0 6px 12px rgba(0,0,0,0.15)',
+          },
+        },
+        outlined: {
+          borderWidth: 2,
+          '&:hover': {
+            borderWidth: 2,
+          },
+        },
+        iconSizeLarge: {
+          '& > *:first-of-type': {
+            fontSize: '1.5rem',
+          },
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 16,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          padding: '2rem',
+          transition: 'all 0.2s ease-in-out',
+          backgroundColor: '#ffffff',
+          '&:hover': {
+            boxShadow: '0 8px 16px rgba(0,0,0,0.12)',
+          },
+          '@media (max-width:600px)': {
+            padding: '1.5rem',
+          },
         },
       },
+    },
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          padding: '2rem',
+          '@media (min-width: 600px)': {
+            padding: '2.5rem',
+          },
+          '@media (min-width: 960px)': {
+            padding: '3rem',
+          },
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 8,
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: '#1a73e8',
+              borderWidth: 2,
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderWidth: 2,
+            },
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        },
+      },
+    },
+    MuiTypography: {
+      styleOverrides: {
+        root: {
+          '&.MuiTypography-h1, &.MuiTypography-h2, &.MuiTypography-h3': {
+            marginBottom: '1.5rem',
+          },
+          '&.MuiTypography-h4, &.MuiTypography-h5, &.MuiTypography-h6': {
+            marginBottom: '1rem',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          padding: '0.75rem',
+          transition: 'all 0.2s ease-in-out',
+          '&:hover': {
+            backgroundColor: 'rgba(26, 115, 232, 0.08)',
+            transform: 'scale(1.1)',
+          },
+        },
+        sizeLarge: {
+          padding: '1rem',
+          '& .MuiSvgIcon-root': {
+            fontSize: '1.75rem',
+          },
+        },
+      },
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  spacing: 8,
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 600,
+      md: 960,
+      lg: 1280,
+      xl: 1920,
     },
   },
 });

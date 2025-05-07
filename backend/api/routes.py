@@ -31,8 +31,6 @@ def health_check():
     })
 
 @api_bp.route('/risk-assessment', methods=['POST'])
-# Removed JWT requirement for MVP
-# @jwt_required()
 def assess_risk():
     """
     Assess credit risk for a farmer based on current agricultural data.
@@ -55,137 +53,45 @@ def assess_risk():
                     "error": f"Missing required field: {field}"
                 }), 400
         
-        # Load latest data
-        raw_data = preprocessor.load_latest_data(days_lookback=30)
-        
-        # Filter data for specific location and crop
-        for category in raw_data:
-            if not raw_data[category].empty:
-                if 'state' in raw_data[category].columns:
-                    raw_data[category] = raw_data[category][
-                        raw_data[category]['state'] == data['location']
-                    ]
-                if 'crop' in raw_data[category].columns:
-                    raw_data[category] = raw_data[category][
-                        raw_data[category]['crop'] == data['crop']
-                    ]
-        
-        # Prepare features and check if empty
-        try:
-            X, feature_names = preprocessor.prepare_features(raw_data)
-        except Exception as e:
-            logger.error(f"Error preparing features: {str(e)}")
-            return jsonify({
-                "risk_score": 0.5,
-                "risk_category": "medium",
-                "explanation": "MVP fallback: insufficient data, returning default risk.",
-                "contributing_factors": {},
-                "metadata": {
-                    "location": data['location'],
-                    "crop": data['crop'],
-                    "scenario": data['scenario'],
-                    "timestamp": datetime.now().isoformat()
-                }
-            }), 200
-        if not feature_names or X.shape[1] == 0:
-            # Return hardcoded response for MVP/test
-            return jsonify({
-                "risk_score": 0.5,
-                "risk_category": "medium",
-                "explanation": "MVP fallback: insufficient data, returning default risk.",
-                "contributing_factors": {},
-                "metadata": {
-                    "location": data['location'],
-                    "crop": data['crop'],
-                    "scenario": data['scenario'],
-                    "timestamp": datetime.now().isoformat()
-                }
-            }), 200
-        
-        # Ensure model is trained or loaded
-        used_dummy_features = False
+        # Ensure model is loaded
         if model.model is None:
             try:
-                model.load_model('models/risk_assessment_model.joblib')
-            except Exception:
-                # For MVP/testing, train with dummy data if model file doesn't exist
-                X, feature_names = preprocessor.prepare_features(raw_data)
-                logger.info(f"Prepared features shape: {getattr(X, 'shape', None)}")
-                logger.info(f"Feature names: {feature_names}")
-                logger.info(f"Raw data keys: {list(raw_data.keys())}")
-                logger.info(f"Raw data sample: { {k: v.head(1).to_dict() for k, v in raw_data.items() if hasattr(v, 'head')} }")
-                if not feature_names or X.shape[1] == 0:
-                    feature_names = ['dummy_feature']
-                    X = pd.DataFrame({"dummy_feature": [0, 1]})
-                    y = [0, 1]
-                    used_dummy_features = True
-                    model.feature_names = feature_names  # Ensure model uses this
-                    logger.info("No features found, using two dummy rows for training.")
-                    model.train(X, y)
-                    try:
-                        _score, _contrib = model.model.predict_proba(X), {}
-                        logger.info(f"Test prediction after training succeeded: score={_score}")
-                    except Exception as e:
-                        logger.error(f"Test prediction after training failed: {str(e)}")
-                else:
-                    if len(X) == 0:
-                        import numpy as np
-                        X = pd.DataFrame(np.zeros((2, len(feature_names))), columns=feature_names)
-                        y = [0, 1]
-                        logger.info("Created two dummy feature rows for training.")
-                    else:
-                        y = [0] * len(X)
-                    logger.info(f"Training model with X shape: {X.shape}, y length: {len(y)}")
-                    model.train(X, y)
-                    try:
-                        _score, _contrib = model.predict({'dummy': X})
-                        logger.info(f"Test prediction after training succeeded: score={_score}")
-                    except Exception as e:
-                        logger.error(f"Test prediction after training failed: {str(e)}")
+                model.load_model('models/xgboost_model.joblib')
+            except Exception as e:
+                logger.error(f"Error loading model: {str(e)}")
+                return jsonify({
+                    "error": "Model not available",
+                    "message": "Please ensure the model is trained before making predictions"
+                }), 503
+        
+        # Get risk assessment from model
         try:
-            if used_dummy_features:
-                # Bypass model logic for dummy case
-                risk_score = 0.5
-                feature_contributions = {}
-            else:
-                risk_score, feature_contributions = model.predict(raw_data)
+            result = model.predict_risk_score(
+                location=data['location'],
+                crop=data['crop'],
+                scenario=data['scenario']
+            )
+            
+            return jsonify({
+                "risk_score": result['score'],
+                "risk_category": result['category'],
+                "explanation": result['reason'],
+                "contributing_factors": result['feature_contributions'],
+                "metadata": {
+                    "location": data['location'],
+                    "crop": data['crop'],
+                    "scenario": data['scenario'],
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
         except Exception as e:
-            logger.error(f"Prediction error: {str(e)}")
+            logger.error(f"Error making prediction: {str(e)}")
             return jsonify({
                 "error": "Prediction failed",
                 "message": str(e)
             }), 500
-        
-        # Determine risk category
-        risk_category = "high" if risk_score > 0.7 else "medium" if risk_score > 0.3 else "low"
-        
-        # Get top contributing factors
-        sorted_contributions = sorted(
-            feature_contributions.items(),
-            key=lambda x: abs(x[1]),
-            reverse=True
-        )
-        
-        # Generate explanation
-        explanation = _generate_risk_explanation(
-            risk_category,
-            sorted_contributions[:3],
-            data['scenario']
-        )
-        
-        return jsonify({
-            "risk_score": float(risk_score),
-            "risk_category": risk_category,
-            "explanation": explanation,
-            "contributing_factors": dict(sorted_contributions[:5]),
-            "metadata": {
-                "location": data['location'],
-                "crop": data['crop'],
-                "scenario": data['scenario'],
-                "timestamp": datetime.now().isoformat()
-            }
-        })
-        
+            
     except Exception as e:
         logger.error(f"Error in risk assessment: {str(e)}")
         return jsonify({
