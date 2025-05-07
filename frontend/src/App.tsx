@@ -71,13 +71,17 @@ function App() {
 // Separate component for content that needs router hooks
 function AppContent() {
   const [assessmentData, setAssessmentData] = useState<any>(null);
+  // We'll use the scenario context for setting values
+  const { setScenario } = useScenario();
   const navigate = useNavigate();
-  const { scenario } = useScenario(); // Access the scenario from context
 
   // Calculate risk score based on form data
   const calculateRiskScore = (formData: any) => {
-    // This is a simplified risk calculation model
-    // In a real application, this would be more complex or call an API
+    console.log('Calculating risk score for:', formData);
+    console.log('Using scenario for calculation:', formData.scenario);
+    
+    // Extract form values
+    const { location, crop, scenario } = formData;
     let baseScore = 0;
     
     // Location-based risk factors
@@ -108,33 +112,6 @@ function AppContent() {
       'Spices': 0.55
     };
     
-    // DIRECT APPROACH: Check the URL for a scenario parameter
-    // This is a workaround for the scenario selection issue
-    let scenarioValue = 'normal'; // Default
-    
-    // Try to get the scenario from the URL
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlScenario = urlParams.get('scenario');
-      if (urlScenario) {
-        scenarioValue = urlScenario;
-      } else if (formData.scenario && formData.scenario !== 'normal') {
-        // If no URL parameter but form data has a non-normal scenario, use that
-        scenarioValue = formData.scenario;
-      }
-    } catch (error) {
-      console.error('Error getting scenario from URL:', error);
-    }
-    
-    // OVERRIDE: If the user explicitly selected a scenario in the form
-    // and it's different from normal, use that instead
-    if (formData.scenario && formData.scenario !== 'normal') {
-      console.log('Overriding with form scenario:', formData.scenario);
-      scenarioValue = formData.scenario;
-    }
-    
-    console.log('FINAL SCENARIO VALUE TO USE:', scenarioValue);
-    
     // Scenario multipliers
     const scenarioMultipliers: {[key: string]: number} = {
       'normal': 1.0,
@@ -152,22 +129,16 @@ function AppContent() {
     };
     
     // Calculate location component
-    const locationRisk = locationRiskMap[formData.location] || 0.4;
+    const locationRisk = locationRiskMap[location] || 0.4;
     
     // Calculate crop component
-    const cropRisk = cropRiskMap[formData.crop] || 0.4;
-    
-    // Debug the scenario value
-    console.log('Scenario value in risk calculation:', scenarioValue, typeof scenarioValue);
-    console.log('Available scenarios:', Object.keys(scenarioRiskFactors));
+    const cropRisk = cropRiskMap[crop] || 0.4;
     
     // Get scenario risk factor (direct contribution)
-    const scenarioRiskFactor = scenarioRiskFactors[scenarioValue] || 0.1;
-    console.log('Selected scenario risk factor:', scenarioRiskFactor);
+    const scenarioRiskFactor = scenarioRiskFactors[scenario] || 0.1;
     
     // Calculate scenario multiplier
-    const scenarioMultiplier = scenarioMultipliers[scenarioValue] || 1.0;
-    console.log('Selected scenario multiplier:', scenarioMultiplier);
+    const scenarioMultiplier = scenarioMultipliers[scenario] || 1.0;
     
     // Calculate base score (average of location and crop risk)
     baseScore = (locationRisk + cropRisk) / 2;
@@ -191,11 +162,11 @@ function AppContent() {
     // Generate reason based on score
     let reason = '';
     if (finalScore < 0.3) {
-      reason = `Low risk detected for ${formData.crop} cultivation in ${formData.location} under ${formData.scenario} conditions.`;
+      reason = `Low risk detected for ${crop} cultivation in ${location} under ${scenario} conditions.`;
     } else if (finalScore < 0.7) {
-      reason = `Moderate risk detected for ${formData.crop} cultivation in ${formData.location} under ${formData.scenario} conditions.`;
+      reason = `Moderate risk detected for ${crop} cultivation in ${location} under ${scenario} conditions.`;
     } else {
-      reason = `High risk detected for ${formData.crop} cultivation in ${formData.location} under ${formData.scenario} conditions.`;
+      reason = `High risk detected for ${crop} cultivation in ${location} under ${scenario} conditions.`;
     }
     
     return {
@@ -209,28 +180,83 @@ function AppContent() {
     };
   };
 
+  // Handle form submission from RiskAssessmentForm
   const handleFormSubmit = (formData: any) => {
     console.log('Form submitted in App component:', formData);
+    console.log('Selected scenario for risk assessment:', formData.scenario);
     
-    // Use the scenario from context to ensure consistency
-    const processedFormData = {
-      location: formData.location,
-      crop: formData.crop,
-      scenario: scenario // Use the scenario from context
-    };
-    
-    console.log('Processing form data with scenario from context:', processedFormData);
-    
-    // Calculate risk assessment result
-    const result = calculateRiskScore(processedFormData);
-    
-    console.log('Calculated result:', result);
-    
-    // Store the result and form data in application state
-    setAssessmentData({
-      formData: processedFormData,
-      result
-    });
+    // If we have risk data from the API, use it
+    if (formData.riskData) {
+      console.log('Using API risk assessment data:', formData.riskData);
+      
+      // Format the API result to match our expected format
+      const formattedResult = {
+        score: formData.riskData.risk_score || 0.5,
+        reason: formData.riskData.explanation || 'Risk assessment based on agricultural data',
+        feature_contributions: formData.riskData.contributing_factors || {
+          location: 0.4,
+          crop: 0.3,
+          scenario: 0.3
+        }
+      };
+      
+      console.log('Formatted API result:', formattedResult);
+      
+      // Store the API result and form data in application state
+      setAssessmentData({
+        formData: {
+          location: formData.location,
+          crop: formData.crop,
+          scenario: formData.scenario
+        },
+        result: formattedResult
+      });
+    } else {
+      // Fallback to local calculation if API data not available
+      console.log('API data not available, using local calculation');
+      
+      // Use the scenario from the form data
+      const processedFormData = {
+        location: formData.location,
+        crop: formData.crop,
+        scenario: formData.scenario
+      };
+      
+      console.log('Processing form data with scenario from form:', processedFormData);
+      
+      // Calculate risk assessment result
+      console.log('Calculating risk with scenario:', processedFormData.scenario);
+      const result = calculateRiskScore(processedFormData);
+      
+      // Ensure the feature_contributions values are valid
+      if (result.feature_contributions) {
+        const contributions = result.feature_contributions as Record<string, number | string>;
+        let sum = 0;
+        
+        // Convert any string values to numbers
+        Object.keys(contributions).forEach(key => {
+          if (typeof contributions[key] === 'string') {
+            contributions[key] = parseFloat(contributions[key] as string) || 0.33;
+          }
+          sum += Number(contributions[key]);
+        });
+        
+        // Normalize values if sum is not close to 1
+        if (Math.abs(sum - 1) > 0.1) {
+          Object.keys(contributions).forEach(key => {
+            contributions[key] = Number(contributions[key]) / sum;
+          });
+        }
+      }
+      
+      console.log('Calculated result:', result);
+      
+      // Store the result and form data in application state
+      setAssessmentData({
+        ...result,
+        formData: processedFormData
+      });
+    }
     
     // Navigate to results page
     navigate('/results');
@@ -263,29 +289,41 @@ function AppContent() {
             <RiskAssessmentForm onSubmit={handleFormSubmit} />
           </Container>
         } />
-        <Route path="results" element={
-          <Container maxWidth="md">
-            <Typography variant="h4" component="h1" gutterBottom>
-              Assessment Results
-            </Typography>
-            {assessmentData ? (
-              <RiskResults result={assessmentData.result} />
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary" paragraph>
-                  No assessment data available. Please complete the risk assessment form first.
+        <Route 
+          path="results" 
+          element={
+            assessmentData ? (
+              <Container maxWidth="md">
+                <Typography variant="h4" component="h1" gutterBottom>
+                  Assessment Results
                 </Typography>
-                <Button 
-                  variant="contained" 
-                  color="primary"
-                  onClick={() => navigate('/risk-assessment')}
-                >
-                  Go to Risk Assessment
-                </Button>
-              </Box>
-            )}
-          </Container>
-        } />
+                <RiskResults 
+                  result={assessmentData} 
+                  formData={{
+                    location: assessmentData.formData?.location || '',
+                    crop: assessmentData.formData?.crop || '',
+                    scenario: assessmentData.formData?.scenario || ''
+                  }} 
+                />
+              </Container>
+            ) : (
+              <Container maxWidth="md">
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body1" color="text.secondary" paragraph>
+                    No assessment data available. Please complete the risk assessment form first.
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    color="primary"
+                    onClick={() => navigate('/risk-assessment')}
+                  >
+                    Go to Risk Assessment
+                  </Button>
+                </Box>
+              </Container>
+            )
+          } 
+        />
       </Route>
     </Routes>
   );

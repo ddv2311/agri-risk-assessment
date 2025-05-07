@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useScenario } from '../context/ScenarioContext';
+import React, { useState, useEffect } from 'react';
 import { 
   TextField, Button, Box, FormControl, 
   Typography, Autocomplete, CircularProgress, Paper,
@@ -11,6 +10,8 @@ import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import PestControlIcon from '@mui/icons-material/PestControl';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import { useScenario } from '../context/ScenarioContext';
+import { riskService } from '../services/api';
 
 interface RiskAssessmentFormProps {
   onSubmit: (formData: any) => void;
@@ -29,32 +30,26 @@ const CROPS = [
 
 // Define scenarios with clear values for selection
 const SCENARIOS = [
-  { value: 'normal', label: 'Normal', icon: <WaterDropIcon />, description: 'Regular weather conditions with adequate rainfall' },
-  { value: 'drought', label: 'Drought', icon: <WbSunnyIcon />, description: 'Low rainfall and water scarcity conditions' },
-  { value: 'flood', label: 'Flood', icon: <WaterDropIcon />, description: 'Excessive rainfall and water logging' },
-  { value: 'pest', label: 'Pest Infestation', icon: <PestControlIcon />, description: 'High pest pressure affecting crop health' }
+  { value: 'normal', label: 'Normal Conditions', icon: <WbSunnyIcon />, description: 'Standard weather and market conditions' },
+  { value: 'drought', label: 'Drought', icon: <WbSunnyIcon />, description: 'Extended period of abnormally low rainfall' },
+  { value: 'flood', label: 'Flood', icon: <WaterDropIcon />, description: 'Overflow of water that submerges land' },
+  { value: 'pest', label: 'Pest Infestation', icon: <PestControlIcon />, description: 'Destructive insect outbreak affecting crops' }
 ];
-
-// No longer needed - removed to fix lint warning
 
 const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => {
   // Get scenario state from context
   const { scenario, setScenario } = useScenario();
   
-  // Initialize form data with the scenario from context
+  // Initialize form data with default values but don't set a default scenario
+  // This will force the user to explicitly select a scenario
   const [formData, setFormData] = useState({
     location: '',
     crop: '',
-    scenario: scenario, // Use the scenario from context
+    scenario: '' // No default scenario - user must select one
   });
   
-  // Update form data when scenario changes in context
-  React.useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      scenario: scenario
-    }));
-  }, [scenario]);
+  // We're no longer automatically syncing form data with context
+  // This ensures the user must explicitly select a scenario
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -63,7 +58,7 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
     const newErrors: Record<string, string> = {};
     if (!formData.location) newErrors.location = 'Location is required';
     if (!formData.crop) newErrors.crop = 'Crop type is required';
-    if (!formData.scenario) newErrors.scenario = 'Scenario is required';
+    if (!formData.scenario) newErrors.scenario = 'Please select a scenario before calculating risk';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -93,30 +88,79 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
     }
   };
 
+  // Log the current scenario before submission for debugging
+  useEffect(() => {
+    console.log('Current scenario in context:', scenario);
+    console.log('Current scenario in form data:', formData.scenario);
+  }, [scenario, formData.scenario]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) return;
     
+    // Get the currently selected scenario from the form data
+    // This is critical to ensure we use what the user selected
+    const selectedScenario = formData.scenario;
+    console.log('Selected scenario for calculation:', selectedScenario);
+    
+    // Make sure the context is updated with the selected scenario
+    if (selectedScenario !== scenario) {
+      console.log('Updating context scenario to match form selection:', selectedScenario);
+      setScenario(selectedScenario);
+    }
+    
+    console.log('Submitting with scenario:', selectedScenario);
     setIsSubmitting(true);
     
     try {
-      // Simulate API call (in a real app, this would be an actual API call)
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       // Prepare the submission data with the current state values
+      // Explicitly use the scenario from form data to ensure it's correct
       const submissionData = {
         location: formData.location,
         crop: formData.crop,
-        scenario: scenario // Use the scenario from context
+        scenario: selectedScenario // Use the scenario from form data
       };
       
-      // Submit the form data to parent component
-      onSubmit(submissionData);
+      console.log('Final submission data:', submissionData);
+      
+      try {
+        // Attempt to make the actual API call to assess risk
+        const riskData = await riskService.assessRisk(submissionData);
+        
+        // Submit the form data and risk assessment results to parent component
+        // Make sure to use the selectedScenario from form data
+        onSubmit({
+          ...submissionData, // This includes the correct scenario
+          riskData: riskData
+        });
+        
+        console.log('Successfully submitted with scenario:', submissionData.scenario);
+      } catch (apiError) {
+        console.warn('API call failed, using fallback local calculation:', apiError);
+        
+        // Fallback: Submit just the form data without API risk data
+        // The parent component will use its local calculation
+        onSubmit(submissionData);
+      }
       
       // No need to navigate here as the parent component handles navigation
     } catch (error) {
       console.error('Error submitting form:', error);
+      setErrors({
+        ...errors,
+        submit: 'Failed to assess risk. Using local calculation instead.'
+      });
+      
+      // Final fallback - submit basic data even if there was an error
+      // Make sure to use the scenario from form data, not context
+      onSubmit({
+        location: formData.location,
+        crop: formData.crop,
+        scenario: formData.scenario // Use form data scenario
+      });
+      
+      console.log('Fallback submission with scenario:', formData.scenario);
     } finally {
       setIsSubmitting(false);
     }
@@ -215,16 +259,19 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
               
               {/* Radio button group for scenario selection */}
               <FormControl component="fieldset" error={!!errors.scenario}>
-                {SCENARIOS.map((scenario) => (
+                {SCENARIOS.map((scenarioOption) => (
                   <Box 
-                    key={scenario.value} 
+                    key={scenarioOption.value} 
                     onClick={() => {
+                      console.log('Selected scenario:', scenarioOption.value);
                       // Update both context and local form data
-                      setScenario(scenario.value);
+                      setScenario(scenarioOption.value);
                       setFormData(prevData => ({
                         ...prevData,
-                        scenario: scenario.value
+                        scenario: scenarioOption.value
                       }));
+                      // Log the updated scenario selection
+                      console.log('Updated scenario selection to:', scenarioOption.value);
                     }}
                     sx={{
                       display: 'flex',
@@ -232,26 +279,26 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
                       p: 2,
                       mb: 1,
                       border: '1px solid',
-                      borderColor: formData.scenario === scenario.value ? 'primary.main' : 'divider',
+                      borderColor: formData.scenario === scenarioOption.value ? 'primary.main' : 'divider',
                       borderRadius: 1,
-                      bgcolor: formData.scenario === scenario.value ? 'primary.light' : 'background.paper',
-                      color: formData.scenario === scenario.value ? 'primary.contrastText' : 'text.primary',
+                      bgcolor: formData.scenario === scenarioOption.value ? 'primary.light' : 'background.paper',
+                      color: formData.scenario === scenarioOption.value ? 'primary.contrastText' : 'text.primary',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       '&:hover': {
-                        bgcolor: formData.scenario === scenario.value ? 'primary.light' : 'action.hover',
+                        bgcolor: formData.scenario === scenarioOption.value ? 'primary.light' : 'action.hover',
                       }
                     }}
                   >
-                    <Box sx={{ mr: 2, color: formData.scenario === scenario.value ? 'inherit' : 'primary.main' }}>
-                      {scenario.icon}
+                    <Box sx={{ mr: 2, color: formData.scenario === scenarioOption.value ? 'inherit' : 'primary.main' }}>
+                      {scenarioOption.icon}
                     </Box>
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: formData.scenario === scenario.value ? 'bold' : 'regular' }}>
-                        {scenario.label}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: formData.scenario === scenarioOption.value ? 'bold' : 'regular' }}>
+                        {scenarioOption.label}
                       </Typography>
-                      <Typography variant="body2" color={formData.scenario === scenario.value ? 'inherit' : 'text.secondary'}>
-                        {scenario.description}
+                      <Typography variant="body2" color={formData.scenario === scenarioOption.value ? 'inherit' : 'text.secondary'}>
+                        {scenarioOption.description}
                       </Typography>
                     </Box>
                   </Box>
@@ -314,7 +361,7 @@ const RiskAssessmentForm: React.FC<RiskAssessmentFormProps> = ({ onSubmit }) => 
                 type="submit" 
                 variant="contained" 
                 color="primary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !formData.scenario} // Disable if no scenario selected
                 startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <CalculateIcon />}
                 sx={{ minWidth: 150 }}
               >

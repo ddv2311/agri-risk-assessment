@@ -31,7 +31,8 @@ def health_check():
     })
 
 @api_bp.route('/risk-assessment', methods=['POST'])
-@jwt_required()
+# Removed JWT requirement for MVP
+# @jwt_required()
 def assess_risk():
     """
     Assess credit risk for a farmer based on current agricultural data.

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { 
-  TextField, Button, Box, Typography, InputAdornment, 
-  IconButton, Card, CardContent, Alert, CircularProgress
+  Box, TextField, Button, Typography, CircularProgress, Alert,
+  InputAdornment, IconButton, Card, CardContent
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { authService } from '../services/api';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
+import { useNavigate } from 'react-router-dom';
 
 interface LoginProps {
   onLogin: (username: string, password: string) => void;
@@ -29,18 +30,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError(null);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Use the auth service to login
+      const response = await authService.login(username, password);
       
-      // For demo purposes, hardcode a valid credential
-      if (username === 'admin' && password === 'password') {
+      if (response.access_token) {
         onLogin(username, password);
         navigate('/risk-assessment');
       } else {
-        setError('Invalid username or password');
+        setError('Authentication failed. Please check your credentials.');
       }
-    } catch (err) {
-      setError('An error occurred during login. Please try again.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'An error occurred during login. Please try again.');
     } finally {
       setIsLoading(false);
     }

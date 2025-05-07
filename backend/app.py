@@ -1,6 +1,7 @@
 """Main application module for the agricultural risk assessment API."""
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import logging
@@ -38,6 +39,9 @@ def create_app(config_name='development'):
         Configured Flask application
     """
     app = Flask(__name__)
+    
+    # Enable CORS for all routes
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     
     # Load configuration
     app.config.from_object(f'config.{config_name.capitalize()}Config')
