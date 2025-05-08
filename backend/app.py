@@ -1,10 +1,11 @@
 """Main application module for the agricultural risk assessment API."""
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, Response
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import logging
+import requests
 
 from api.auth import init_auth, auth_bp
 from api.routes import api_bp
@@ -40,8 +41,8 @@ def create_app(config_name='development'):
     """
     app = Flask(__name__)
     
-    # Enable CORS for all routes
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Enable CORS for Vite dev server only
+    CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
     
     # Load configuration
     app.config.from_object(f'config.{config_name.capitalize()}Config')
@@ -66,6 +67,24 @@ def create_app(config_name='development'):
     @app.errorhandler(500)
     def internal_error(error):
         return {'error': 'Internal server error'}, 500
+    
+    @app.route('/api/translate', methods=['POST'])
+    def proxy_translate():
+        data = request.get_json()
+        if not data or 'q' not in data or 'target' not in data:
+            return {"error": "Missing required fields"}, 400
+
+        r = requests.post(
+            'https://libretranslate.com/translate',
+            json={
+                "q": data["q"],
+                "source": data.get("source", "en"),
+                "target": data["target"],
+                "format": data.get("format", "text")
+            },
+            headers={'Content-Type': 'application/json'}
+        )
+        return Response(r.content, status=r.status_code, content_type=r.headers.get('Content-Type'))
     
     return app
 

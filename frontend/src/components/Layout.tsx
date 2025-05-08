@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   AppBar, Toolbar, Typography, Box, Container, Paper, Divider, 
   useTheme, Button, IconButton, useMediaQuery, Drawer, List,
-  ListItem, ListItemIcon, ListItemText
+  ListItem, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip
 } from '@mui/material';
 import { Link as RouterLink, useLocation, Outlet } from 'react-router-dom';
 import AgricultureIcon from '@mui/icons-material/Agriculture';
@@ -12,12 +12,31 @@ import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
+import LanguageIcon from '@mui/icons-material/Language';
+import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
+import LanguageSwitcher from './LanguageSwitcher';
+
+const stateLanguages = [
+  { state: 'Maharashtra', code: 'mr', label: 'Marathi' },
+  { state: 'Punjab', code: 'pa', label: 'Punjabi' },
+  { state: 'Haryana', code: 'hi', label: 'Hindi' },
+  { state: 'Uttar Pradesh', code: 'hi', label: 'Hindi' },
+  { state: 'Karnataka', code: 'kn', label: 'Kannada' },
+  { state: 'Tamil Nadu', code: 'ta', label: 'Tamil' },
+  { state: 'Andhra Pradesh', code: 'te', label: 'Telugu' },
+  { state: 'Gujarat', code: 'gu', label: 'Gujarati' },
+  { state: 'West Bengal', code: 'bn', label: 'Bengali' },
+  { state: 'Madhya Pradesh', code: 'hi', label: 'Hindi' }
+];
 
 const Layout: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const location = useLocation();
+  const { i18n, t } = useTranslation();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -28,9 +47,19 @@ const Layout: React.FC = () => {
   };
 
   const navItems = [
-    { text: 'Risk Assessment', path: '/risk-assessment', icon: <AssessmentIcon /> },
+    { text: 'RiskAssessment', path: '/risk-assessment', icon: <AssessmentIcon /> },
     { text: 'Results', path: '/results', icon: <BarChartIcon /> },
   ];
+
+  const handleLangMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+  const handleLangClose = () => setAnchorEl(null);
+
+  const handleLangChange = (code: string) => {
+    i18n.changeLanguage(code);
+    handleLangClose();
+  };
 
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
@@ -138,6 +167,8 @@ const Layout: React.FC = () => {
               ))}
             </Box>
           )}
+          
+          <LanguageSwitcher />
         </Toolbar>
       </AppBar>
 
