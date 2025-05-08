@@ -7,6 +7,7 @@ import RiskAssessmentForm from './components/RiskAssessmentForm';
 import RiskResults from './components/RiskResults';
 import { Container, Typography } from '@mui/material';
 import { ScenarioProvider, useScenario } from './context/ScenarioContext';
+import NewsAlertsPage from './pages/NewsAlertsPage';
 
 // Define theme
 const theme = createTheme({
@@ -524,7 +525,7 @@ function AppContent() {
         </Container>
       } />
       
-      <Route path="/" element={<LayoutWrapper />}>
+      <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/risk-assessment" replace />} />
         <Route path="risk-assessment" element={
           <Container maxWidth="md">
@@ -569,6 +570,7 @@ function AppContent() {
             )
           } 
         />
+        <Route path="news-alerts" element={<NewsAlertsPage />} />
       </Route>
     </Routes>
   );

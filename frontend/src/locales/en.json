@@ -3,5 +3,15 @@
       "riskAssessment": "Risk Assessment",
       "results": "Results"
     },
-    "welcome": "Welcome to AgriRisk"
+    "welcome": "Welcome to AgriRisk",
+    "newsAlerts": {
+      "title": "Region News & Alerts",
+      "weather": "Weather",
+      "market": "Market",
+      "schemes": "Schemes",
+      "refresh": "Refresh",
+      "loading": "Loading updates...",
+      "error": "Failed to fetch updates",
+      "noUpdates": "No updates available"
+    }
   }

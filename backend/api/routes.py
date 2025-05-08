@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
+import requests
+from bs4 import BeautifulSoup
 
 from models.xgboost_model import RiskAssessmentModel
 from data.preprocessing import DataPreprocessor
@@ -278,6 +280,26 @@ def get_historical_risk():
             "error": "Internal server error",
             "message": str(e)
         }), 500
+
+@api_bp.route('/region-news')
+def region_news():
+    region = request.args.get('region', 'Maharashtra')
+    url = 'https://mausam.imd.gov.in/mausam/latest-warning'
+    resp = requests.get(url)
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    alerts = []
+    for item in soup.select('.warning-table tr'):
+        cols = item.find_all('td')
+        if cols and region.lower() in cols[0].text.lower():
+            alerts.append({
+                'title': cols[0].text.strip(),
+                'description': cols[1].text.strip() if len(cols) > 1 else '',
+                'source': 'IMD',
+                'date': '',
+                'type': 'weather',
+                'priority': 'high'
+            })
+    return jsonify(alerts)
 
 def _generate_risk_explanation(risk_category: str, top_factors: list, scenario: str) -> str:
     """Generate human-readable explanation for risk assessment."""

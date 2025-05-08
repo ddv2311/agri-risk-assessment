@@ -13,9 +13,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import LanguageIcon from '@mui/icons-material/Language';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import LanguageSwitcher from './LanguageSwitcher';
+import Navbar from './Navbar';
 
 const stateLanguages = [
   { state: 'Maharashtra', code: 'mr', label: 'Marathi' },
@@ -47,8 +49,9 @@ const Layout: React.FC = () => {
   };
 
   const navItems = [
-    { text: 'RiskAssessment', path: '/risk-assessment', icon: <AssessmentIcon /> },
-    { text: 'Results', path: '/results', icon: <BarChartIcon /> },
+    { text: t('navbar.riskAssessment'), path: '/risk-assessment', icon: <AssessmentIcon /> },
+    { text: t('navbar.results'), path: '/results', icon: <BarChartIcon /> },
+    { text: t('newsAlerts.title'), icon: <NotificationsIcon />, path: '/news-alerts' }
   ];
 
   const handleLangMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -103,6 +106,7 @@ const Layout: React.FC = () => {
       minHeight: '100vh',
       bgcolor: '#f8f9fa'
     }}>
+      <Navbar />
       <AppBar 
         position="sticky" 
         elevation={1}
