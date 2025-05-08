@@ -10,7 +10,11 @@ import {
   InfoOutlined as InfoIcon,
   Download as DownloadIcon,
   Share as ShareIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  LightbulbOutlined,
+  Opacity,
+  BugReport,
+  WbSunny
 } from '@mui/icons-material';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -23,6 +27,7 @@ import {
   Legend,
   ArcElement
 } from 'chart.js';
+import HistoricalRiskTrends from './HistoricalRiskTrends';
 
 // Register Chart.js components
 ChartJS.register(
@@ -125,7 +130,7 @@ const RiskResults: React.FC<RiskResultsProps> = ({ result, formData }) => {
   // Generate default risk factors based on location, crop and scenario
   const getDefaultRiskFactors = () => {
     // Base location risk factors
-    const locationRiskFactors = {
+    const locationRiskFactors: { [key: string]: number } = {
       'Maharashtra': 0.35,
       'Punjab': 0.30,
       'Haryana': 0.32,
@@ -139,7 +144,7 @@ const RiskResults: React.FC<RiskResultsProps> = ({ result, formData }) => {
     };
     
     // Base crop risk factors
-    const cropRiskFactors = {
+    const cropRiskFactors: { [key: string]: number } = {
       'Rice': 0.40,
       'Wheat': 0.30,
       'Cotton': 0.45,
@@ -153,7 +158,7 @@ const RiskResults: React.FC<RiskResultsProps> = ({ result, formData }) => {
     };
     
     // Scenario risk multipliers
-    const scenarioRiskFactors = {
+    const scenarioRiskFactors: { [key: string]: number } = {
       'normal': 0.20,
       'drought': 0.45,
       'flood': 0.50,
@@ -339,6 +344,38 @@ const RiskResults: React.FC<RiskResultsProps> = ({ result, formData }) => {
 
   const handlePrintReport = () => {
     window.print();
+  };
+
+  const getPersonalizedRecommendations = (riskLevel: string, crop: string, location: string) => {
+    // Example logic for recommendations
+    const recs = [];
+    if (riskLevel === 'High Risk') {
+      recs.push({
+        icon: <WarningIcon color="error" />, title: 'Immediate Action', advice: 'Implement urgent risk mitigation strategies and consult local experts.'
+      });
+    }
+    if (crop.toLowerCase().includes('rice')) {
+      recs.push({
+        icon: <Opacity color="primary" />, title: 'Water Management', advice: 'Ensure paddy fields are not waterlogged and monitor irrigation closely.'
+      });
+    }
+    if (crop.toLowerCase().includes('wheat')) {
+      recs.push({
+        icon: <WbSunny color="warning" />, title: 'Weather Precaution', advice: 'Protect wheat crops from unseasonal rains and monitor temperature swings.'
+      });
+    }
+    if (location.toLowerCase().includes('punjab')) {
+      recs.push({
+        icon: <BugReport color="success" />, title: 'Pest Alert', advice: 'Scout for pests regularly and use integrated pest management.'
+      });
+    }
+    // Default recommendation
+    if (recs.length === 0) {
+      recs.push({
+        icon: <LightbulbOutlined color="secondary" />, title: 'General Advice', advice: 'Follow best practices for crop and soil health.'
+      });
+    }
+    return recs.slice(0, 4);
   };
 
   return (
@@ -538,6 +575,49 @@ const RiskResults: React.FC<RiskResultsProps> = ({ result, formData }) => {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Personalized Recommendations Section */}
+      <Box sx={{
+        my: 3,
+        p: 2,
+        borderRadius: 2,
+        bgcolor: theme.palette.mode === 'light' ? '#fffde7' : '#263238',
+        boxShadow: 1,
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        gap: 2,
+        flexWrap: 'wrap',
+        alignItems: 'stretch',
+      }}>
+        <Typography variant="h6" sx={{ mb: { xs: 2, sm: 0 }, width: '100%' }}>
+          Personalized Recommendations
+        </Typography>
+        {getPersonalizedRecommendations(riskInfo.level, crop, location).map((rec, idx) => (
+          <Box key={idx} sx={{
+            flex: '1 1 220px',
+            minWidth: 200,
+            bgcolor: theme.palette.mode === 'light' ? '#f9fbe7' : '#37474f',
+            borderRadius: 2,
+            p: 2,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 2,
+            boxShadow: 0,
+          }}>
+            {rec.icon}
+            <Box>
+              <Typography variant="subtitle1" fontWeight={600}>{rec.title}</Typography>
+              <Typography variant="body2" color="text.secondary">{rec.advice}</Typography>
+            </Box>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Add Historical Risk Trends section */}
+      <HistoricalRiskTrends
+        location={location}
+        crop={crop}
+      />
     </Box>
   );
 };

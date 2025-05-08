@@ -2,8 +2,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
 
 from models.xgboost_model import RiskAssessmentModel
 from data.preprocessing import DataPreprocessor
@@ -171,6 +172,112 @@ def api_documentation():
             # ... other endpoints
         }
     })
+
+@api_bp.route('/historical-risk', methods=['GET'])
+def get_historical_risk():
+    """
+    Get historical risk assessment data for a specific location and crop.
+    
+    Query parameters:
+    - location: The location to get data for
+    - crop: The crop type
+    - months: Number of months to look back (6 or 12)
+    """
+    try:
+        # Get query parameters
+        location = request.args.get('location')
+        crop = request.args.get('crop')
+        months = int(request.args.get('months', 6))
+        
+        # Validate parameters
+        if not location or not crop:
+            return jsonify({
+                "error": "Missing required parameters: location and crop"
+            }), 400
+            
+        if months not in [6, 12]:
+            return jsonify({
+                "error": "Invalid months parameter. Must be 6 or 12"
+            }), 400
+        
+        # Generate dates for the requested period
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30 * months)
+        dates = pd.date_range(start=start_date, end=end_date, freq='M')
+        
+        # For MVP, generate synthetic historical data
+        # In production, this would fetch from a database
+        risk_scores = []
+        for date in dates:
+            # Generate a base risk score with some randomness
+            base_score = 0.3 + np.random.normal(0, 0.1)  # Random score around 0.3
+            
+            # Add seasonal variations
+            month = date.month
+            if month in [6, 7, 8]:  # Summer months
+                base_score += 0.1  # Higher risk in summer
+            elif month in [12, 1, 2]:  # Winter months
+                base_score -= 0.05  # Lower risk in winter
+                
+            # Add location-specific variations
+            location_factors = {
+                'Maharashtra': 0.05,
+                'Punjab': -0.05,
+                'Haryana': -0.03,
+                'Uttar Pradesh': 0.03,
+                'Karnataka': 0.02,
+                'Tamil Nadu': 0.04,
+                'Andhra Pradesh': 0.06,
+                'Gujarat': 0.01,
+                'West Bengal': 0.07,
+                'Madhya Pradesh': -0.02
+            }
+            base_score += location_factors.get(location, 0)
+            
+            # Add crop-specific variations
+            crop_factors = {
+                'Rice': 0.04,
+                'Wheat': -0.03,
+                'Cotton': 0.05,
+                'Sugarcane': 0.02,
+                'Maize': -0.02,
+                'Pulses': 0.01,
+                'Oilseeds': 0.03,
+                'Vegetables': -0.04,
+                'Fruits': -0.05,
+                'Spices': 0.02
+            }
+            base_score += crop_factors.get(crop, 0)
+            
+            # Ensure score is between 0 and 1
+            risk_scores.append(max(0, min(1, base_score)))
+        
+        # Format dates for chart labels
+        labels = [date.strftime('%b %Y') for date in dates]
+        
+        return jsonify({
+            "labels": labels,
+            "datasets": [{
+                "label": "Risk Score",
+                "data": risk_scores,
+                "fill": True,
+                "backgroundColor": "rgba(255, 193, 7, 0.1)",
+                "borderColor": "#ffc107",
+                "tension": 0.4,
+                "pointBackgroundColor": "#ffc107",
+                "pointBorderColor": "#fff",
+                "pointBorderWidth": 2,
+                "pointRadius": 4,
+                "pointHoverRadius": 6
+            }]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in historical risk data: {str(e)}")
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
 
 def _generate_risk_explanation(risk_category: str, top_factors: list, scenario: str) -> str:
     """Generate human-readable explanation for risk assessment."""
