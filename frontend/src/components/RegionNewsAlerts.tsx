@@ -170,8 +170,8 @@ const RegionNewsAlerts: React.FC = () => {
                   }
                   secondary={
                     <>
-                      <Typography variant="body2" color="text.secondary">{a.description}</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary" component="span">{a.description}</Typography>
+                      <Typography variant="caption" color="text.secondary" component="span" sx={{ display: 'block', mt: 0.5 }}>
                         {a.source?.name} • {a.publishedAt ? new Date(a.publishedAt).toLocaleString() : ''}
                       </Typography>
                     </>

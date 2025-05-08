@@ -7,6 +7,21 @@ import pandas as pd
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
+import os
+from google.cloud import dialogflow_v2 as dialogflow
+from google.api_core.exceptions import InvalidArgument
+# Handle different versions of langchain imports
+try:
+    # Try importing Groq provider
+    from langchain_groq import ChatGroq
+except ImportError:
+    # If Groq is not installed as a dedicated provider, fall back to a generic provider
+    try:
+        from langchain_community.chat_models.groq import ChatGroq
+    except ImportError:
+        ChatGroq = None
+        logger.error("Groq integration not available. Install with: pip install langchain-groq")
+from langchain.prompts import PromptTemplate
 
 from models.xgboost_model import RiskAssessmentModel
 from data.preprocessing import DataPreprocessor
@@ -25,7 +40,20 @@ except Exception as e:
     model = None
     preprocessor = None
 
-NEWSAPI_KEY = "0835f72883674450adefa5d1271af61e"
+# Load API keys from environment variables instead of hardcoding
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
+DIALOGFLOW_PROJECT_ID = os.environ.get("DIALOGFLOW_PROJECT_ID", "")
+DIALOGFLOW_LANGUAGE_CODE = 'en'
+DIALOGFLOW_KEY_PATH = os.environ.get("DIALOGFLOW_KEY_PATH", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+
+# Initialize session client only if key path is available
+SESSION_CLIENT = None
+if os.path.exists(DIALOGFLOW_KEY_PATH):
+    try:
+        SESSION_CLIENT = dialogflow.SessionsClient.from_service_account_file(DIALOGFLOW_KEY_PATH)
+    except Exception as e:
+        logger.error(f"Failed to initialize Dialogflow client: {str(e)}")
 
 @api_bp.route('/health', methods=['GET'])
 def health_check():
@@ -49,6 +77,10 @@ def assess_risk():
     """
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({
+                "error": "Invalid JSON"
+            }), 400
         
         # Validate required fields
         required_fields = ['location', 'crop', 'scenario']
@@ -59,8 +91,10 @@ def assess_risk():
                 }), 400
         
         # Ensure model is loaded
-        if model.model is None:
+        if model is None or model.model is None:
             try:
+                if model is None:
+                    model = RiskAssessmentModel()
                 model.load_model('models/xgboost_model.joblib')
             except Exception as e:
                 logger.error(f"Error loading model: {str(e)}")
@@ -119,8 +153,7 @@ def retrain_model():
         # Prepare features
         X, feature_names = preprocessor.prepare_features(raw_data)
         
-        # For MVP, generate synthetic labels
-        # In production, this would use actual historical default data
+        # Generate synthetic labels for training
         y = _generate_synthetic_labels(X)
         
         # Train model
@@ -148,6 +181,11 @@ def retrain_model():
 def get_model_summary():
     """Get current model configuration and performance summary."""
     try:
+        if model is None:
+            return jsonify({
+                "error": "Model not initialized"
+            }), 503
+            
         summary = model.get_model_summary()
         return jsonify(summary)
         
@@ -164,6 +202,10 @@ def api_documentation():
     return jsonify({
         "version": "1.0.0",
         "endpoints": {
+            "/health": {
+                "method": "GET",
+                "description": "Health check endpoint"
+            },
             "/risk-assessment": {
                 "method": "POST",
                 "description": "Calculate credit risk score",
@@ -173,7 +215,48 @@ def api_documentation():
                     "scenario": "string (normal/drought/flood)"
                 }
             },
-            # ... other endpoints
+            "/model/retrain": {
+                "method": "POST",
+                "description": "Retrain the risk assessment model",
+                "auth_required": "Admin only"
+            },
+            "/model/summary": {
+                "method": "GET",
+                "description": "Get model configuration and performance summary",
+                "auth_required": "Yes"
+            },
+            "/historical-risk": {
+                "method": "GET",
+                "description": "Get historical risk data",
+                "parameters": {
+                    "location": "string (e.g., 'Gujarat')",
+                    "crop": "string (e.g., 'wheat')",
+                    "months": "integer (6 or 12)"
+                }
+            },
+            "/region-news": {
+                "method": "GET",
+                "description": "Get agricultural news by region",
+                "parameters": {
+                    "region": "string (e.g., 'Maharashtra')"
+                }
+            },
+            "/news": {
+                "method": "GET",
+                "description": "Get categorized news for a region",
+                "parameters": {
+                    "region": "string (e.g., 'India')",
+                    "category": "string (weather/market/schemes/general)"
+                }
+            },
+            "/chatbot": {
+                "method": "POST",
+                "description": "LLM-powered agricultural chatbot",
+                "parameters": {
+                    "message": "string (user's message)",
+                    "sender": "string (user identifier)"
+                }
+            }
         }
     })
 
@@ -251,7 +334,7 @@ def get_historical_risk():
                 'Fruits': -0.05,
                 'Spices': 0.02
             }
-            base_score += crop_factors.get(crop, 0)
+            base_score += crop_factors.get(crop.capitalize(), 0)
             
             # Ensure score is between 0 and 1
             risk_scores.append(max(0, min(1, base_score)))
@@ -285,6 +368,12 @@ def get_historical_risk():
 
 @api_bp.route('/region-news')
 def region_news():
+    """
+    Get region-specific agricultural alerts and news.
+    
+    Query parameters:
+    - region: The region to get news for (default: Maharashtra)
+    """
     region = request.args.get('region', 'Maharashtra').lower()
     alerts = []
 
@@ -292,22 +381,23 @@ def region_news():
     try:
         url = 'https://mausam.imd.gov.in/mausam/latest-warning'
         resp = requests.get(url, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        for item in soup.select('.warning-table tr'):
-            cols = item.find_all('td')
-            if cols:
-                row_text = ' '.join(col.text.lower() for col in cols)
-                if region in row_text:
-                    alerts.append({
-                        'title': cols[0].text.strip(),
-                        'description': cols[1].text.strip() if len(cols) > 1 else '',
-                        'source': 'IMD',
-                        'date': '',
-                        'type': 'weather',
-                        'priority': 'high'
-                    })
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            for item in soup.select('.warning-table tr'):
+                cols = item.find_all('td')
+                if cols:
+                    row_text = ' '.join(col.text.lower() for col in cols)
+                    if region in row_text:
+                        alerts.append({
+                            'title': cols[0].text.strip(),
+                            'description': cols[1].text.strip() if len(cols) > 1 else '',
+                            'source': 'IMD',
+                            'date': datetime.now().strftime('%Y-%m-%d'),
+                            'type': 'weather',
+                            'priority': 'high'
+                        })
     except Exception as e:
-        print("Weather scraping failed:", e)
+        logger.error(f"Weather scraping failed: {str(e)}")
 
     # 2. Market Prices (Agmarknet) - Example: scrape or use mock data
     try:
@@ -319,6 +409,14 @@ def region_news():
             ],
             'punjab': [
                 {'commodity': 'Wheat', 'price': '₹2,250/qtl', 'market': 'Ludhiana', 'date': '2024-03-21'}
+            ],
+            'gujarat': [
+                {'commodity': 'Cotton', 'price': '₹5,800/qtl', 'market': 'Ahmedabad', 'date': '2024-03-21'},
+                {'commodity': 'Groundnut', 'price': '₹4,750/qtl', 'market': 'Rajkot', 'date': '2024-03-21'}
+            ],
+            'karnataka': [
+                {'commodity': 'Coffee', 'price': '₹18,500/qtl', 'market': 'Hassan', 'date': '2024-03-21'},
+                {'commodity': 'Ragi', 'price': '₹3,100/qtl', 'market': 'Bengaluru', 'date': '2024-03-21'}
             ]
             # Add more as needed
         }
@@ -332,7 +430,7 @@ def region_news():
                 'priority': 'medium'
             })
     except Exception as e:
-        print("Market scraping failed:", e)
+        logger.error(f"Market data processing failed: {str(e)}")
 
     # 3. Government Schemes (agriculture.gov.in) - Example: use mock data
     try:
@@ -342,6 +440,12 @@ def region_news():
             ],
             'punjab': [
                 {'title': 'Crop Insurance Update', 'desc': 'New insurance scheme for wheat farmers.', 'date': '2024-03-19'}
+            ],
+            'gujarat': [
+                {'title': 'Soil Health Card', 'desc': 'Last date for Soil Health Card applications extended.', 'date': '2024-03-18'}
+            ],
+            'karnataka': [
+                {'title': 'Subsidy for Sprinklers', 'desc': 'New subsidy scheme for sprinkler irrigation systems.', 'date': '2024-03-21'}
             ]
             # Add more as needed
         }
@@ -355,20 +459,67 @@ def region_news():
                 'priority': 'medium'
             })
     except Exception as e:
-        print("Scheme scraping failed:", e)
+        logger.error(f"Scheme data processing failed: {str(e)}")
 
     return jsonify(alerts)
 
 @api_bp.route('/news', methods=['GET'])
 def region_news_proxy():
+    """
+    Get news articles for a specific region and category.
+    
+    Query parameters:
+    - region: The region to get news for (default: India)
+    - category: News category (weather/market/schemes/general)
+    """
     region = request.args.get('region', 'India')
     category = request.args.get('category', 'general')
+    
+    if not NEWSAPI_KEY:
+        # Return mock data if NewsAPI key is not configured
+        mock_news = {
+            'weather': [
+                {
+                    'title': f'Weather Update for {region}',
+                    'description': 'Temperature expected to remain moderate with chances of light rain.',
+                    'url': '#',
+                    'publishedAt': datetime.now().isoformat()
+                }
+            ],
+            'market': [
+                {
+                    'title': f'Market Prices in {region}',
+                    'description': 'Current mandi prices show stable trends for major crops.',
+                    'url': '#',
+                    'publishedAt': datetime.now().isoformat()
+                }
+            ],
+            'schemes': [
+                {
+                    'title': f'Government Schemes for {region}',
+                    'description': 'New agricultural subsidy schemes announced for farmers.',
+                    'url': '#',
+                    'publishedAt': datetime.now().isoformat()
+                }
+            ],
+            'general': [
+                {
+                    'title': f'Agricultural News from {region}',
+                    'description': 'Latest updates on farming practices and crop management.',
+                    'url': '#',
+                    'publishedAt': datetime.now().isoformat()
+                }
+            ]
+        }
+        return jsonify({"articles": mock_news.get(category, mock_news['general'])})
+    
     queries = {
         'weather': f"{region} weather agriculture",
         'market': f"{region} mandi market price agriculture",
         'schemes': f"{region} government agriculture scheme subsidy"
     }
     q = queries.get(category, f"{region} agriculture")
+    
     url = (
         f"https://newsapi.org/v2/everything?"
         f"q={requests.utils.quote(q)}"
@@ -384,7 +535,83 @@ def region_news_proxy():
             return jsonify({"articles": [], "error": data.get("message", "Failed to fetch news")}), 502
         return jsonify({"articles": data.get("articles", [])})
     except Exception as e:
+        logger.error(f"News API request failed: {str(e)}")
         return jsonify({"articles": [], "error": str(e)}), 500
+
+@api_bp.route('/chatbot', methods=['POST'])
+def chatbot_langchain():
+    """
+    LLM-powered agricultural chatbot using Groq.
+    
+    Expected request body:
+    {
+        "message": "user's message",
+        "sender": "user identifier" (optional)
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify([{"text": "Invalid request format"}]), 400
+            
+        user_message = data.get('message', '')
+        if not user_message:
+            return jsonify([{"text": "Please provide a message"}]), 400
+            
+        sender_id = data.get('sender', 'anonymous')
+        
+        if not GROQ_API_KEY:
+            return jsonify([{"text": "Chatbot service is not configured"}]), 503
+        
+        if ChatGroq is None:
+            return jsonify([{"text": "Groq integration is not available. Please install the required packages."}]), 503
+            
+        try:
+            # Try with model_name parameter (newer API)
+            llm = ChatGroq(api_key=GROQ_API_KEY, model_name="gemma2-9b-it")
+        except TypeError:
+            try:
+                # Fall back to model parameter (older API)
+                llm = ChatGroq(api_key=GROQ_API_KEY, model="gemma2-9b-it")
+            except Exception as e:
+                logger.error(f"Failed to initialize Groq client: {str(e)}")
+                return jsonify([{"text": "Failed to initialize chatbot. Please check configuration."}]), 503
+        
+        agri_prompt = PromptTemplate(
+            input_variables=["user_message"],
+            template=(
+                "You are Agri Assistant, a helpful, region-aware chatbot for Indian farmers. "
+                "You can explain agricultural risk assessment results, suggest optimal crops for a given region and season, "
+                "provide weather and mandi (market) price updates, and answer questions about government schemes. "
+                "Always answer in simple, clear language suitable for farmers. "
+                "If the user asks about risk, explain what a high, medium, or low risk means for their farm. "
+                "If the user asks for crop suggestions, consider the region, season, and common crops. "
+                "If the user asks about weather or market prices, give general advice or tell them where to check official updates. "
+                "If the user asks about government schemes, mention PM-KISAN, crop insurance, or subsidies if relevant. "
+                "If you don't know the answer, politely say so and suggest where the user can find more information. "
+                "User: {user_message}\n"
+                "Agri Assistant:"
+            )
+        )
+        prompt = agri_prompt.format(user_message=user_message)
+        
+        try:
+            # Try invoke method (newer API)
+            response = llm.invoke(prompt)
+            response_text = getattr(response, 'content', str(response))
+        except AttributeError:
+            try:
+                # Fall back to __call__ (older API)
+                response = llm(prompt)
+                response_text = str(response)
+            except Exception as e:
+                logger.error(f"Failed to get response from Groq: {str(e)}")
+                return jsonify([{"text": "Failed to get a response from the chatbot."}]), 503
+                
+        return jsonify([{"text": response_text}])
+    except Exception as e:
+        logger.error(f"Chatbot error: {str(e)}")
+        return jsonify([{"text": "Sorry, the assistant is currently unavailable."}]), 503
 
 def _generate_risk_explanation(risk_category: str, top_factors: list, scenario: str) -> str:
     """Generate human-readable explanation for risk assessment."""
@@ -441,8 +668,6 @@ def _generate_synthetic_labels(X: pd.DataFrame) -> pd.Series:
     Generate synthetic labels for training.
     This is for MVP only - in production, use actual default data.
     """
-    import numpy as np
-    
     # Calculate risk scores based on feature combinations
     risk_scores = np.zeros(len(X))
     
@@ -461,5 +686,5 @@ def _generate_synthetic_labels(X: pd.DataFrame) -> pd.Series:
     # Scale to [0, 1]
     risk_scores = 1 / (1 + np.exp(-risk_scores))
     
-    # Convert to binary labels
+    # Convert to binary labels (default/no default)
     return (risk_scores > 0.5).astype(int)

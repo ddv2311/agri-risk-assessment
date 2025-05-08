@@ -201,12 +201,6 @@ const HistoricalRiskTrends: React.FC<HistoricalRiskTrendsProps> = ({ location, c
             </TextField>
           </Stack>
 
-          {error && (
-            <Typography color="error" sx={{ mb: 2 }}>
-              {error}
-            </Typography>
-          )}
-
           <Box sx={{ height: 400, width: '100%', position: 'relative' }}>
             {isLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>

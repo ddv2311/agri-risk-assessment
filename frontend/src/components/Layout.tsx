@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import LanguageSwitcher from './LanguageSwitcher';
 import Navbar from './Navbar';
+import ChatbotPopup from './ChatbotPopup';
 
 const stateLanguages = [
   { state: 'Maharashtra', code: 'mr', label: 'Marathi' },
@@ -248,6 +249,7 @@ const Layout: React.FC = () => {
           </Box>
         </Container>
       </Paper>
+      <ChatbotPopup />
     </Box>
   );
 };

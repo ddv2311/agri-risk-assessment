@@ -30,6 +30,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+
 def create_app(config_name='development'):
     """Create and configure the Flask application.
     
@@ -42,7 +44,10 @@ def create_app(config_name='development'):
     app = Flask(__name__)
     
     # Enable CORS for Vite dev server only
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+    CORS(app, resources={
+        r"/api/*": {"origins": "http://localhost:5173"},
+        r"/api/v1/*": {"origins": "http://localhost:5173"}
+    })
     
     # Load configuration
     app.config.from_object(f'config.{config_name.capitalize()}Config')
@@ -53,6 +58,7 @@ def create_app(config_name='development'):
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_bp, url_prefix='/api/v1')
     
     init_auth(app)
     
