@@ -25,6 +25,8 @@ except Exception as e:
     model = None
     preprocessor = None
 
+NEWSAPI_KEY = "0835f72883674450adefa5d1271af61e"
+
 @api_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
@@ -283,23 +285,106 @@ def get_historical_risk():
 
 @api_bp.route('/region-news')
 def region_news():
-    region = request.args.get('region', 'Maharashtra')
-    url = 'https://mausam.imd.gov.in/mausam/latest-warning'
-    resp = requests.get(url)
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    region = request.args.get('region', 'Maharashtra').lower()
     alerts = []
-    for item in soup.select('.warning-table tr'):
-        cols = item.find_all('td')
-        if cols and region.lower() in cols[0].text.lower():
+
+    # 1. Weather Alerts (IMD)
+    try:
+        url = 'https://mausam.imd.gov.in/mausam/latest-warning'
+        resp = requests.get(url, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        for item in soup.select('.warning-table tr'):
+            cols = item.find_all('td')
+            if cols:
+                row_text = ' '.join(col.text.lower() for col in cols)
+                if region in row_text:
+                    alerts.append({
+                        'title': cols[0].text.strip(),
+                        'description': cols[1].text.strip() if len(cols) > 1 else '',
+                        'source': 'IMD',
+                        'date': '',
+                        'type': 'weather',
+                        'priority': 'high'
+                    })
+    except Exception as e:
+        print("Weather scraping failed:", e)
+
+    # 2. Market Prices (Agmarknet) - Example: scrape or use mock data
+    try:
+        # For demo, use mock data. Replace with real scraping if needed.
+        market_mock = {
+            'maharashtra': [
+                {'commodity': 'Wheat', 'price': '₹2,200/qtl', 'market': 'Pune', 'date': '2024-03-21'},
+                {'commodity': 'Onion', 'price': '₹1,000/qtl', 'market': 'Nashik', 'date': '2024-03-21'}
+            ],
+            'punjab': [
+                {'commodity': 'Wheat', 'price': '₹2,250/qtl', 'market': 'Ludhiana', 'date': '2024-03-21'}
+            ]
+            # Add more as needed
+        }
+        for entry in market_mock.get(region, []):
             alerts.append({
-                'title': cols[0].text.strip(),
-                'description': cols[1].text.strip() if len(cols) > 1 else '',
-                'source': 'IMD',
-                'date': '',
-                'type': 'weather',
-                'priority': 'high'
+                'title': f"{entry['commodity']} Price Update",
+                'description': f"{entry['commodity']} is trading at {entry['price']} in {entry['market']}.",
+                'source': 'Agmarknet',
+                'date': entry['date'],
+                'type': 'market',
+                'priority': 'medium'
             })
+    except Exception as e:
+        print("Market scraping failed:", e)
+
+    # 3. Government Schemes (agriculture.gov.in) - Example: use mock data
+    try:
+        scheme_mock = {
+            'maharashtra': [
+                {'title': 'PM-KISAN Installment', 'desc': 'Next PM-KISAN installment to be credited soon.', 'date': '2024-03-20'}
+            ],
+            'punjab': [
+                {'title': 'Crop Insurance Update', 'desc': 'New insurance scheme for wheat farmers.', 'date': '2024-03-19'}
+            ]
+            # Add more as needed
+        }
+        for entry in scheme_mock.get(region, []):
+            alerts.append({
+                'title': entry['title'],
+                'description': entry['desc'],
+                'source': 'agriculture.gov.in',
+                'date': entry['date'],
+                'type': 'scheme',
+                'priority': 'medium'
+            })
+    except Exception as e:
+        print("Scheme scraping failed:", e)
+
     return jsonify(alerts)
+
+@api_bp.route('/news', methods=['GET'])
+def region_news_proxy():
+    region = request.args.get('region', 'India')
+    category = request.args.get('category', 'general')
+    queries = {
+        'weather': f"{region} weather agriculture",
+        'market': f"{region} mandi market price agriculture",
+        'schemes': f"{region} government agriculture scheme subsidy"
+    }
+    q = queries.get(category, f"{region} agriculture")
+    url = (
+        f"https://newsapi.org/v2/everything?"
+        f"q={requests.utils.quote(q)}"
+        f"&language=en"
+        f"&sortBy=publishedAt"
+        f"&apiKey={NEWSAPI_KEY}"
+        f"&pageSize=10"
+    )
+    try:
+        resp = requests.get(url, timeout=5)
+        data = resp.json()
+        if data.get("status") != "ok":
+            return jsonify({"articles": [], "error": data.get("message", "Failed to fetch news")}), 502
+        return jsonify({"articles": data.get("articles", [])})
+    except Exception as e:
+        return jsonify({"articles": [], "error": str(e)}), 500
 
 def _generate_risk_explanation(risk_category: str, top_factors: list, scenario: str) -> str:
     """Generate human-readable explanation for risk assessment."""

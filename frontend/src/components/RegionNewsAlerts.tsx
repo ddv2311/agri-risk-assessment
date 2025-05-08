@@ -23,9 +23,11 @@ import {
   Campaign as SchemeIcon,
   Refresh as RefreshIcon,
   Warning as AlertIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  ErrorOutline as ErrorOutlineIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import axios from 'axios';
 
 interface NewsItem {
   id: string;
@@ -37,71 +39,68 @@ interface NewsItem {
   priority?: 'high' | 'medium' | 'low';
 }
 
-interface RegionNewsAlertsProps {
-  location: string;
-}
+const TABS = [
+  { label: 'Weather', icon: <WeatherIcon />, category: 'weather' },
+  { label: 'Market', icon: <MarketIcon />, category: 'market' },
+  { label: 'Schemes', icon: <SchemeIcon />, category: 'schemes' }
+];
 
-const RegionNewsAlerts: React.FC<RegionNewsAlertsProps> = ({ location }) => {
+const getRegion = async () => {
+  // Try browser geolocation, fallback to 'India'
+  try {
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
+    );
+    // You can use a reverse geocoding API here to get the state/region from lat/lon
+    // For demo, fallback to 'India'
+    return 'India';
+  } catch {
+    return 'India';
+  }
+};
+
+const RegionNewsAlerts: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [news, setNews] = useState<NewsItem[]>([]);
+  const [tab, setTab] = useState(0);
+  const [region, setRegion] = useState('India');
+  const [loading, setLoading] = useState(false);
+  const [articles, setArticles] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock data for demonstration - Replace with actual API calls
-  const mockNewsData: NewsItem[] = [
-    {
-      id: '1',
-      title: 'Heavy Rainfall Alert',
-      description: 'Heavy rainfall expected in the next 48 hours. Farmers advised to take necessary precautions.',
-      source: 'IMD',
-      date: '2024-03-20',
-      type: 'weather',
-      priority: 'high'
-    },
-    {
-      id: '2',
-      title: 'Wheat MSP Increased',
-      description: 'Government announces new MSP for wheat at ₹2,275 per quintal for the upcoming season.',
-      source: 'Ministry of Agriculture',
-      date: '2024-03-19',
-      type: 'market',
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      title: 'PM-KISAN Scheme Update',
-      description: 'Next installment of PM-KISAN to be credited by end of this month.',
-      source: 'Agriculture Department',
-      date: '2024-03-18',
-      type: 'scheme',
-      priority: 'medium'
+  const fetchNews = async (selectedTab = tab, selectedRegion = region) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get('/api/news', {
+        params: {
+          region: selectedRegion,
+          category: TABS[selectedTab].category
+        }
+      });
+      setArticles(res.data.articles || []);
+      setError(res.data.error || null);
+    } catch (e: any) {
+      setError('Failed to fetch news');
+      setArticles([]);
     }
-  ];
+    setLoading(false);
+  };
 
   useEffect(() => {
-    fetchNews();
-  }, [location]);
+    getRegion().then(r => {
+      setRegion(r);
+      fetchNews(tab, r);
+    });
+    // eslint-disable-next-line
+  }, []);
 
-  const fetchNews = async () => {
-    setLoading(true);
-    try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setNews(mockNewsData);
-      setError(null);
-    } catch (err) {
-      setError(t('newsAlerts.error'));
-      console.error('Error fetching news:', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleTabChange = (_: any, newTab: number) => {
+    setTab(newTab);
+    fetchNews(newTab, region);
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
+  const handleRefresh = () => fetchNews(tab, region);
 
   const getPriorityColor = (priority?: string) => {
     switch (priority) {
@@ -129,98 +128,56 @@ const RegionNewsAlerts: React.FC<RegionNewsAlertsProps> = ({ location }) => {
     }
   };
 
-  const filteredNews = news.filter(item => {
-    switch (activeTab) {
-      case 0:
-        return item.type === 'weather';
-      case 1:
-        return item.type === 'market';
-      case 2:
-        return item.type === 'scheme';
-      default:
-        return true;
-    }
-  });
-
   return (
-    <Card elevation={3} sx={{ borderRadius: 2, height: '100%' }}>
+    <Card elevation={3} sx={{ borderRadius: 2, width: '100%', maxWidth: 600, mx: 'auto', my: 2 }}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="h2">
-            {t('newsAlerts.title')}
-          </Typography>
-          <Tooltip title={t('newsAlerts.refresh')}>
-            <IconButton onClick={fetchNews} size="small">
-              <RefreshIcon />
-            </IconButton>
+          <Typography variant="h6">Region News & Alerts</Typography>
+          <Tooltip title="Refresh">
+            <IconButton onClick={handleRefresh}><RefreshIcon /></IconButton>
           </Tooltip>
         </Box>
-
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          variant="fullWidth"
-          sx={{ mb: 2 }}
-        >
-          <Tab icon={<WeatherIcon />} label={t('newsAlerts.weather')} />
-          <Tab icon={<MarketIcon />} label={t('newsAlerts.market')} />
-          <Tab icon={<SchemeIcon />} label={t('newsAlerts.schemes')} />
+        <Tabs value={tab} onChange={handleTabChange} variant="fullWidth" sx={{ mb: 2 }}>
+          {TABS.map((t, i) => (
+            <Tab key={t.label} icon={t.icon} label={t.label} />
+          ))}
         </Tabs>
-
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
         ) : error ? (
-          <Typography color="error" align="center">
-            {error}
-          </Typography>
-        ) : filteredNews.length === 0 ? (
-          <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
-            {t('newsAlerts.noUpdates')}
+          <Box sx={{ textAlign: 'center', color: 'error.main', py: 2 }}>
+            <ErrorOutlineIcon sx={{ mb: 1 }} />
+            <Typography>{error}</Typography>
+          </Box>
+        ) : articles.length === 0 ? (
+          <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+            No news or alerts available for this region.
           </Typography>
         ) : (
-          <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-            {filteredNews.map((item, index) => (
-              <React.Fragment key={item.id}>
-                <ListItem alignItems="flex-start" sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 40 }}>
-                    {getIconForType(item.type)}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="subtitle2" component="span">
-                          {item.title}
-                        </Typography>
-                        {item.priority && (
-                          <Chip
-                            label={item.priority}
-                            size="small"
-                            sx={{
-                              bgcolor: `${getPriorityColor(item.priority)}20`,
-                              color: getPriorityColor(item.priority),
-                              height: 20,
-                              '& .MuiChip-label': { px: 1 }
-                            }}
-                          />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      <>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {item.description}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                          {item.source} • {new Date(item.date).toLocaleDateString()}
-                        </Typography>
-                      </>
-                    }
-                  />
-                </ListItem>
-                {index < filteredNews.length - 1 && <Divider component="li" />}
-              </React.Fragment>
+          <List>
+            {articles.map((a, idx) => (
+              <ListItem key={idx} alignItems="flex-start" sx={{ mb: 1 }}>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle2" component="span">{a.title}</Typography>
+                      {a.title?.toLowerCase().includes('alert') && (
+                        <Chip label="High Alert" color="error" size="small" />
+                      )}
+                    </Box>
+                  }
+                  secondary={
+                    <>
+                      <Typography variant="body2" color="text.secondary">{a.description}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        {a.source?.name} • {a.publishedAt ? new Date(a.publishedAt).toLocaleString() : ''}
+                      </Typography>
+                    </>
+                  }
+                />
+              </ListItem>
             ))}
           </List>
         )}
