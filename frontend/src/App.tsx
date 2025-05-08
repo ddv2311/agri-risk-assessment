@@ -8,6 +8,7 @@ import RiskResults from './components/RiskResults';
 import { Container, Typography } from '@mui/material';
 import { ScenarioProvider, useScenario } from './context/ScenarioContext';
 import NewsAlertsPage from './pages/NewsAlertsPage';
+import RiskMapView from './components/RiskMapView';
 
 // Define theme
 const theme = createTheme({
@@ -571,6 +572,17 @@ function AppContent() {
           } 
         />
         <Route path="news-alerts" element={<NewsAlertsPage />} />
+        <Route 
+          path="risk-map" 
+          element={
+            <Container maxWidth="md">
+              <Typography variant="h4" component="h1" gutterBottom>
+                Agricultural Risk Map
+              </Typography>
+              <RiskMapView />
+            </Container>
+          }
+        />
       </Route>
     </Routes>
   );

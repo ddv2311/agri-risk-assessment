@@ -14,6 +14,7 @@ import GitHubIcon from '@mui/icons-material/GitHub';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import LanguageIcon from '@mui/icons-material/Language';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import MapIcon from '@mui/icons-material/Map';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -52,7 +53,8 @@ const Layout: React.FC = () => {
   const navItems = [
     { text: t('navbar.riskAssessment'), path: '/risk-assessment', icon: <AssessmentIcon /> },
     { text: t('navbar.results'), path: '/results', icon: <BarChartIcon /> },
-    { text: t('newsAlerts.title'), icon: <NotificationsIcon />, path: '/news-alerts' }
+    { text: t('newsAlerts.title'), icon: <NotificationsIcon />, path: '/news-alerts' },
+    { text: 'Risk Map', icon: <MapIcon />, path: '/risk-map' }
   ];
 
   const handleLangMenu = (event: React.MouseEvent<HTMLElement>) => {

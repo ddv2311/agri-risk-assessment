@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import MapIcon from '@mui/icons-material/Map';
 import { useTranslation } from 'react-i18next';
 
 const Navbar: React.FC = () => {
@@ -12,7 +13,8 @@ const Navbar: React.FC = () => {
   const navItems = [
     { text: t('navbar.riskAssessment'), icon: <AssessmentIcon />, path: '/risk-assessment' },
     { text: t('navbar.results'), icon: <BarChartIcon />, path: '/results' },
-    { text: t('newsAlerts.title'), icon: <NotificationsIcon />, path: '/news-alerts' }
+    { text: t('newsAlerts.title'), icon: <NotificationsIcon />, path: '/news-alerts' },
+    { text: 'Risk Map', icon: <MapIcon />, path: '/risk-map' },
   ];
 
   return (
